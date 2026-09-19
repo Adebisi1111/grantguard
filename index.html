@@ -193,7 +193,7 @@
     </div>
 
     <script>
-    const API = window.location.origin.includes('github') ? '' : 'http://localhost:8000';
+    const API = 'https://grantguard-56ax.onrender.com';
     
     let grants = [];
     let currentGrantId = null;
@@ -231,29 +231,35 @@
     }
     
     async function loadGrants() {
-        showLoading('Loading grants...');
-        try {
-            const res = await fetch(API + '/api/grants');
-            if (!res.ok) throw new Error('Server error');
-            grants = await res.json();
-            
-            const listEl = document.getElementById('grants-list');
-            if (grants.length === 0) {
-                listEl.innerHTML = '<p style="color:#666;">No grants available yet. Create the first one!</p>';
-            } else {
-                let html = '';
-                grants.forEach(g => {
-                    html += `<div class="grant-card" onclick="viewGrant(${g.id})">
-                        <h3>${g.name}</h3>
-                        <p>${g.description ? g.description.slice(0, 100) + '...' : ''}</p>
-                        <div class="deadline">Deadline: ${g.deadline || 'No deadline'}</div>
-                    </div>`;
-                });
-                listEl.innerHTML = html;
+        showLoading('Loading grants... (waking up server if needed)');
+        
+        for (let i = 0; i < 15; i++) {
+            try {
+                const res = await fetch(API + '/api/grants');
+                if (!res.ok) throw new Error('Server error: ' + res.status);
+                grants = await res.json();
+                
+                const listEl = document.getElementById('grants-list');
+                if (grants.length === 0) {
+                    listEl.innerHTML = '<p style="color:#666;">No grants available yet. Create the first one!</p>';
+                } else {
+                    let html = '';
+                    grants.forEach(g => {
+                        html += `<div class="grant-card" onclick="viewGrant(${g.id})">
+                            <h3>${g.name}</h3>
+                            <p>${g.description ? g.description.slice(0, 100) + '...' : ''}</p>
+                            <div class="deadline">Deadline: ${g.deadline || 'No deadline'}</div>
+                        </div>`;
+                    });
+                    listEl.innerHTML = html;
+                }
+                hideLoading();
+                return;
+            } catch(e) {
+                await new Promise(r => setTimeout(r, 2000));
             }
-        } catch(e) {
-            showError('Failed to load grants: ' + e.message);
         }
+        showError('Failed to load grants. Please refresh.');
         hideLoading();
     }
     
@@ -438,47 +444,81 @@
         }
         
         showLoading('Checking status...');
-        try {
-            const res = await fetch(API + '/api/applications/' + appId);
-            if (!res.ok) throw new Error('Not found');
-            const app = await res.json();
-            
-            const resultEl = document.getElementById('status-result');
-            let html = `
-                <div class="result-box">
-                    <h2>Application #${app.id}</h2>
-                    <p><strong>Project:</strong> ${app.project_name}</p>
-                    <p><strong>Status:</strong> <span class="status-badge status-${app.status}">${app.status}</span></p>
-            `;
-            
-            if (app.status === 'EVALUATED' && app.evaluation) {
-                const ev = typeof app.evaluation === 'string' ? JSON.parse(app.evaluation) : app.evaluation;
-                html += `
-                    <div class="final-assessment">
-                        <div class="label">Final Assessment</div>
-                        <div class="value ${ev.final}">${ev.final}</div>
-                    </div>
-                    <div class="criteria-grid">
-                        <div class="criteria-item"><div class="label">Eligibility</div><div class="value ${ev.eligibility}">${ev.eligibility}</div></div>
-                        <div class="criteria-item"><div class="label">Completeness</div><div class="value ${ev.completeness}">${ev.completeness}</div></div>
-                        <div class="criteria-item"><div class="label">Feasibility</div><div class="value ${ev.feasibility}">${ev.feasibility}</div></div>
-                        <div class="criteria-item"><div class="label">Budget</div><div class="value ${ev.budget}">${ev.budget}</div></div>
-                        <div class="criteria-item"><div class="label">Evidence</div><div class="value ${ev.evidence}">${ev.evidence}</div></div>
-                    </div>
-                    <div class="reasons">
-                        <h4>Reasons</h4>
-                        <ul>${ev.reasons.map(r => `<li>${r}</li>`).join('')}</ul>
-                    </div>
+        
+        for (let i = 0; i < 5; i++) {
+            try {
+                const res = await fetch(API + '/api/applications/' + appId);
+                if (!res.ok) throw new Error('Not found');
+                const app = await res.json();
+                
+                const resultEl = document.getElementById('status-result');
+                let html = `
+                    <div class="result-box">
+                        <h2>Application #${app.id}</h2>
+                        <p><strong>Project:</strong> ${app.project_name}</p>
+                        <p><strong>Status:</strong> <span class="status-badge status-${app.status}">${app.status}</span></p>
                 `;
+                
+                if (app.status === 'EVALUATED' && app.evaluation) {
+                    const ev = typeof app.evaluation === 'string' ? JSON.parse(app.evaluation) : app.evaluation;
+                    html += `
+                        <div class="final-assessment">
+                            <div class="label">Final Assessment</div>
+                            <div class="value ${ev.final}">${ev.final}</div>
+                        </div>
+                        <div class="criteria-grid">
+                            <div class="criteria-item"><div class="label">Eligibility</div><div class="value ${ev.eligibility}">${ev.eligibility}</div></div>
+                            <div class="criteria-item"><div class="label">Completeness</div><div class="value ${ev.completeness}">${ev.completeness}</div></div>
+                            <div class="criteria-item"><div class="label">Feasibility</div><div class="value ${ev.feasibility}">${ev.feasibility}</div></div>
+                            <div class="criteria-item"><div class="label">Budget</div><div class="value ${ev.budget}">${ev.budget}</div></div>
+                            <div class="criteria-item"><div class="label">Evidence</div><div class="value ${ev.evidence}">${ev.evidence}</div></div>
+                        </div>
+                        <div class="reasons">
+                            <h4>Reasons</h4>
+                            <ul>${ev.reasons.map(r => `<li>${r}</li>`).join('')}</ul>
+                        </div>
+                    `;
+                } else if (app.status === 'SUBMITTED') {
+                    html += `<button class="btn btn-sm" onclick="evaluateApp(${app.id})" style="margin-top:1rem;">Evaluate Application</button>`;
+                }
+                
+                html += '</div>';
+                resultEl.innerHTML = html;
+                hideLoading();
+                return;
+            } catch(e) {
+                await new Promise(r => setTimeout(r, 2000));
             }
-            
-            html += '</div>';
-            resultEl.innerHTML = html;
-        } catch(e) {
-            showError('Error: ' + e.message);
         }
+        showError('Failed to load application. Please refresh.');
         hideLoading();
     }
+    async function evaluateApp(appId) {
+        showLoading('Evaluating application...');
+        
+        for (let i = 0; i < 5; i++) {
+            try {
+                const res = await fetch(API + '/api/applications/' + appId + '/evaluate', {
+                    method: 'POST'
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    checkStatus();
+                    hideLoading();
+                    return;
+                } else {
+                    throw new Error(data.detail || 'Evaluation failed');
+                }
+            } catch(e) {
+                if (i < 4) {
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+            }
+        }
+        showError('Failed to evaluate. Please try again.');
+        hideLoading();
+    }
+    
     </script>
 </body>
 </html>
