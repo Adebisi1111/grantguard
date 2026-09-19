@@ -10,7 +10,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const CONTRACT = process.env.CONTRACT_ADDRESS || '0xA8Ff9ABF68011Cd0aa5BF5cdE71Ab22AD0665231';
+const CONTRACT = process.env.CONTRACT_ADDRESS || '0x141D04fcbEB85BE92e8e12f1bB482020F9b37AF3';
 const PK = process.env.PRIVATE_KEY || '';
 
 // UUID mapping file (off-chain lookup: UUID -> sequential ID)
