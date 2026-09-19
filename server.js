@@ -10,7 +10,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const CONTRACT = process.env.CONTRACT_ADDRESS || '0x141D04fcbEB85BE92e8e12f1bB482020F9b37AF3';
+const CONTRACT = process.env.CONTRACT_ADDRESS || '0xca1d331C2a2cF3f58721edd765ef7ADe9d9cc227';
 const PK = process.env.PRIVATE_KEY || '';
 
 // UUID mapping file includes contract address to avoid stale mappings

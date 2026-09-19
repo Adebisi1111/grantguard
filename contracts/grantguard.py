@@ -4,15 +4,6 @@ import json
 from genlayer import *
 
 
-STATUS_SUBMITTED = "SUBMITTED"
-STATUS_EVALUATING = "EVALUATING"
-STATUS_EVALUATED = "EVALUATED"
-ASSESS_PASS = "PASS"
-ASSESS_REVIEW = "REVIEW"
-ASSESS_FAIL = "FAIL"
-ASSESS_INSUFFICIENT = "INSUFFICIENT_EVIDENCE"
-
-
 class GrantGuard(gl.Contract):
     grants: TreeMap[u256, str]
     applications: TreeMap[u256, str]
@@ -103,7 +94,7 @@ class GrantGuard(gl.Contract):
             "github_url": github_url,
             "evidence_urls": evidence_urls,
             "additional_info": additional_info,
-            "status": STATUS_SUBMITTED,
+            "status": "SUBMITTED",
             "evaluation": None
         })
         return app_id
@@ -126,46 +117,84 @@ class GrantGuard(gl.Contract):
                     result.append(parsed)
         return json.dumps(result)
 
+    def _analyze_application(self, app: dict) -> dict:
+        """AI leader analysis using gl.nondet.exec_prompt"""
+        prompt = (
+            f"Evaluate this grant application:\n"
+            f"Project: {app.get('project_name', '')}\n"
+            f"Description: {app.get('project_description', '')}\n"
+            f"Team: {app.get('team_info', '')}\n"
+            f"Amount: {app.get('requested_amount', '')}\n"
+            f"Evidence: {app.get('evidence_urls', '')}\n\n"
+            f"Rate each criterion as PASS, REVIEW, or FAIL.\n"
+            f"Respond as JSON with exactly this format:\n"
+            f'{{"eligibility":"PASS","completeness":"PASS","feasibility":"PASS","budget":"PASS","evidence":"PASS","final":"PASS","reasons":[]}}'
+        )
+        
+        try:
+            res = gl.nondet.exec_prompt(prompt, response_format="json")
+            return {
+                "eligibility": res.get("eligibility", "REVIEW").upper(),
+                "completeness": res.get("completeness", "REVIEW").upper(),
+                "feasibility": res.get("feasibility", "REVIEW").upper(),
+                "budget": res.get("budget", "REVIEW").upper(),
+                "evidence": res.get("evidence", "REVIEW").upper(),
+                "final": res.get("final", "REVIEW").upper(),
+                "reasons": res.get("reasons", [])
+            }
+        except Exception as e:
+            return {
+                "eligibility": "REVIEW",
+                "completeness": "REVIEW",
+                "feasibility": "REVIEW",
+                "budget": "REVIEW",
+                "evidence": "REVIEW",
+                "final": "REVIEW",
+                "reasons": [f"AI analysis error: {str(e)}"]
+            }
+
     @gl.public.write
     def evaluateApplication(self, app_id: u256) -> str:
+        """Evaluate using AI consensus (TruthOracle v2 pattern)"""
         app_raw = self.applications.get(app_id, None)
         if app_raw is None:
             raise gl.vm.UserError("Application not found")
 
         app = json.loads(app_raw)
 
-        project_name = app.get("project_name", "")
-        project_description = app.get("project_description", "")
-        team_info = app.get("team_info", "")
-        additional_info = app.get("additional_info", "")
-        evidence_urls = app.get("evidence_urls", "")
-        requested_amount = app.get("requested_amount", "")
+        def get_analysis() -> dict:
+            return self._analyze_application(app)
 
-        evaluation = {
-            "eligibility": ASSESS_PASS,
-            "completeness": ASSESS_PASS if len(project_description) > 30 else ASSESS_REVIEW,
-            "feasibility": ASSESS_PASS if len(project_description) > 50 and len(team_info) > 10 else ASSESS_REVIEW,
-            "budget": ASSESS_PASS if requested_amount and not requested_amount.startswith("0") else ASSESS_REVIEW,
-            "evidence": ASSESS_PASS if evidence_urls and len(evidence_urls) > 10 else ASSESS_INSUFFICIENT,
-            "final": ASSESS_PASS,
-            "reasons": []
-        }
+        principle = (
+            "The evaluations should agree on whether the application meets the grant criteria. "
+            "Minor wording differences are acceptable as long as the final verdict matches."
+        )
 
-        if evaluation["completeness"] == ASSESS_REVIEW:
-            evaluation["reasons"].append("Project description could be more detailed.")
-        if evaluation["feasibility"] == ASSESS_REVIEW:
-            evaluation["reasons"].append("Team information or technical details need clarification.")
-        if evaluation["evidence"] == ASSESS_INSUFFICIENT:
-            evaluation["reasons"].append("No evidence URLs provided or evidence is insufficient.")
-        if evaluation["budget"] == ASSESS_REVIEW:
-            evaluation["reasons"].append("Requested amount needs justification.")
+        try:
+            # AI consensus using prompt_comparative (TruthOracle v2 pattern)
+            verified = gl.eq_principle.prompt_comparative(get_analysis, principle)
+            evaluation = {
+                "eligibility": verified.get("eligibility", "REVIEW").upper(),
+                "completeness": verified.get("completeness", "REVIEW").upper(),
+                "feasibility": verified.get("feasibility", "REVIEW").upper(),
+                "budget": verified.get("budget", "REVIEW").upper(),
+                "evidence": verified.get("evidence", "REVIEW").upper(),
+                "final": verified.get("final", "REVIEW").upper(),
+                "reasons": verified.get("reasons", [])
+            }
+        except Exception:
+            # Fallback to deterministic if consensus fails
+            evaluation = {
+                "eligibility": "PASS",
+                "completeness": "PASS" if len(app.get("project_description", "")) > 30 else "REVIEW",
+                "feasibility": "PASS" if len(app.get("project_description", "")) > 50 else "REVIEW",
+                "budget": "PASS" if app.get("requested_amount") else "REVIEW",
+                "evidence": "PASS" if app.get("evidence_urls") else "REVIEW",
+                "final": "PASS",
+                "reasons": []
+            }
 
-        if evaluation["evidence"] == ASSESS_INSUFFICIENT:
-            evaluation["final"] = ASSESS_REVIEW
-        elif evaluation["completeness"] == ASSESS_REVIEW or evaluation["feasibility"] == ASSESS_REVIEW:
-            evaluation["final"] = ASSESS_REVIEW
-
-        app["status"] = STATUS_EVALUATED
+        app["status"] = "EVALUATED"
         app["evaluation"] = evaluation
         self.applications[app_id] = json.dumps(app)
 
@@ -178,6 +207,3 @@ class GrantGuard(gl.Contract):
     @gl.public.view
     def getNextAppId(self) -> str:
         return str(int(self.next_app_id))
-
-
-import json
