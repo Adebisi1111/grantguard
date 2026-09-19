@@ -193,7 +193,7 @@
     </div>
 
     <script>
-    const API = 'https://grantguard-56ax.onrender.com';
+    const API = window.location.origin.includes('github') ? '' : 'http://localhost:8000';
     
     let grants = [];
     let currentGrantId = null;
