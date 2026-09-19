@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const { createClient, chains } = require('genlayer-js');
 const { privateKeyToAccount } = require('viem/accounts');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 app.use(cors());
@@ -9,6 +12,33 @@ app.use(express.json());
 
 const CONTRACT = process.env.CONTRACT_ADDRESS || '0xA8Ff9ABF68011Cd0aa5BF5cdE71Ab22AD0665231';
 const PK = process.env.PRIVATE_KEY || '';
+
+// UUID mapping file (off-chain lookup: UUID -> sequential ID)
+const UUID_MAP_FILE = path.join(__dirname, '.uuid-map.json');
+
+function loadUuidMap() {
+  try {
+    return JSON.parse(fs.readFileSync(UUID_MAP_FILE, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveUuidMap(map) {
+  fs.writeFileSync(UUID_MAP_FILE, JSON.stringify(map, null, 2));
+}
+
+function generateAppId() {
+  return crypto.randomUUID();
+}
+
+function findUuidBySequentialId(seqId) {
+  const map = loadUuidMap();
+  for (const [uuid, id] of Object.entries(map)) {
+    if (id === seqId) return uuid;
+  }
+  return null;
+}
 
 if (!PK) console.error('WARNING: PRIVATE_KEY not set!');
 const account = PK ? privateKeyToAccount(PK) : null;
@@ -87,7 +117,15 @@ app.post('/api/applications', async (req, res) => {
     });
 
     const nextId = await read('getNextAppId');
-    const appId = Number(nextId) - 1;
+    const seqId = Number(nextId) - 1;
+
+    // Generate unique non-guessable UUID for user-facing ID
+    const appId = generateAppId();
+
+    // Persist UUID -> sequential ID mapping
+    const map = loadUuidMap();
+    map[appId] = seqId;
+    saveUuidMap(map);
 
     res.json({ status: 'success', tx_hash: txHash, app_id: appId });
   } catch (err) {
@@ -98,7 +136,18 @@ app.post('/api/applications', async (req, res) => {
 
 app.get('/api/applications/:id', async (req, res) => {
   try {
-    const raw = await read('getApplication', [Number(req.params.id)]);
+    let seqId = Number(req.params.id);
+
+    // If id is not a number, look up the UUID map
+    if (isNaN(seqId)) {
+      const map = loadUuidMap();
+      seqId = map[req.params.id];
+      if (seqId === undefined) {
+        return res.status(404).json({ detail: 'Application not found' });
+      }
+    }
+
+    const raw = await read('getApplication', [seqId]);
     res.json(JSON.parse(raw));
   } catch (err) {
     res.status(500).json({ detail: err.message });
@@ -116,10 +165,21 @@ app.get('/api/grants/:grantId/applications', async (req, res) => {
 
 app.post('/api/applications/:id/evaluate', async (req, res) => {
   try {
+    let seqId = Number(req.params.id);
+
+    // If id is not a number, look up the UUID map
+    if (isNaN(seqId)) {
+      const map = loadUuidMap();
+      seqId = map[req.params.id];
+      if (seqId === undefined) {
+        return res.status(404).json({ detail: 'Application not found' });
+      }
+    }
+
     const raw = await client.writeContract({
       address: CONTRACT,
       functionName: 'evaluateApplication',
-      args: [Number(req.params.id)],
+      args: [seqId],
       gasLimit: GAS_LIMIT
     });
     res.json({ status: 'success', evaluation: JSON.parse(raw) });

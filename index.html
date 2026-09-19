@@ -57,13 +57,6 @@
         .reasons li { padding: 0.25rem 0; padding-left: 1rem; position: relative; }
         .reasons li::before { content: "•"; position: absolute; left: 0; color: #7c3aed; }
         
-        .evidence-section { margin-bottom: 1rem; }
-        .evidence-section h4 { color: #888; margin-bottom: 0.5rem; }
-        .evidence-list { list-style: none; padding-left: 0; }
-        .evidence-list li { padding: 0.25rem 0; font-size: 0.85rem; word-break: break-all; }
-        .evidence-used { color: #00d4aa; }
-        .evidence-unreachable { color: #ff9f43; }
-        
         .status-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
         .status-SUBMITTED { background: #7c3aed33; color: #7c3aed; }
         .status-EVALUATING { background: #ffd93d33; color: #ffd93d; }
@@ -110,20 +103,17 @@
             </div>
         </nav>
         
-        <!-- Grants List Page -->
         <div id="grants-page" class="page active">
             <h1>Available Grants</h1>
             <p class="subtitle">Browse active grant opportunities</p>
             <div id="grants-list"></div>
         </div>
         
-        <!-- Grant Detail + Apply -->
         <div id="grant-detail-page" class="page">
             <div id="grant-detail"></div>
             <div id="application-form"></div>
         </div>
         
-        <!-- Create Grant Page -->
         <div id="create-grant-page" class="page">
             <h1>Create Grant</h1>
             <p class="subtitle">Publish a new grant opportunity</p>
@@ -132,7 +122,7 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>Grant Name *</label>
-                        <input type="text" id="grant-name" required placeholder="e.g., DeFi Innovation Grant">
+                        <input type="text" id="grant-name" required>
                     </div>
                     <div class="form-group">
                         <label>Deadline</label>
@@ -141,47 +131,37 @@
                 </div>
                 <div class="form-group">
                     <label>Description *</label>
-                    <textarea id="grant-description" required placeholder="Describe the grant purpose and scope"></textarea>
+                    <textarea id="grant-description" required></textarea>
                 </div>
                 <div class="form-group">
                     <label>Eligibility Criteria *</label>
-                    <textarea id="grant-eligibility" required placeholder="Who is eligible to apply?"></textarea>
+                    <textarea id="grant-eligibility" required></textarea>
                 </div>
                 <div class="form-group">
                     <label>Evaluation Criteria *</label>
-                    <textarea id="grant-criteria" required placeholder="How will applications be evaluated?"></textarea>
+                    <textarea id="grant-criteria" required></textarea>
                 </div>
                 <div class="form-group">
                     <label>Budget Rules</label>
-                    <textarea id="grant-budget" placeholder="Funding range, budget constraints"></textarea>
+                    <textarea id="grant-budget"></textarea>
                 </div>
                 <div class="form-group">
                     <label>Required Evidence</label>
-                    <textarea id="grant-evidence" placeholder="What evidence must applicants provide?"></textarea>
+                    <textarea id="grant-evidence"></textarea>
                 </div>
                 <button type="submit" class="btn">Publish Grant</button>
             </form>
         </div>
         
-        <!-- Check Status Page -->
         <div id="check-status-page" class="page">
             <h1>Check Application Status</h1>
-            <p class="subtitle">Enter your application ID to check status</p>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Application ID</label>
-                    <input type="number" id="check-app-id" placeholder="0">
-                </div>
-                <div class="form-group" style="display:flex;align-items:flex-end;">
-                    <button class="btn btn-sm" onclick="checkStatus()">Check</button>
-                </div>
+            <p class="subtitle">Enter your unique Application ID</p>
+            <div class="form-group">
+                <label>Application ID (UUID)</label>
+                <input type="text" id="check-app-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
             </div>
+            <button class="btn btn-sm" onclick="checkStatus()">Check</button>
             <div id="status-result"></div>
-        </div>
-        
-        <!-- Evaluation Result Page -->
-        <div id="result-page" class="page">
-            <div id="result-content"></div>
         </div>
         
         <div id="loading" class="loading">
@@ -198,7 +178,6 @@
     let grants = [];
     let currentGrantId = null;
     
-    // Initialize
     loadGrants();
     
     function showPage(page) {
@@ -276,30 +255,12 @@
         detailEl.innerHTML = `
             <div class="grant-detail">
                 <h2>${grant.name}</h2>
-                <div class="field">
-                    <div class="field-label">Description</div>
-                    <div class="field-value">${grant.description || '-'}</div>
-                </div>
-                <div class="field">
-                    <div class="field-label">Eligibility</div>
-                    <div class="field-value">${grant.eligibility || '-'}</div>
-                </div>
-                <div class="field">
-                    <div class="field-label">Evaluation Criteria</div>
-                    <div class="field-value">${grant.criteria || '-'}</div>
-                </div>
-                <div class="field">
-                    <div class="field-label">Budget Rules</div>
-                    <div class="field-value">${grant.budget_rules || '-'}</div>
-                </div>
-                <div class="field">
-                    <div class="field-label">Required Evidence</div>
-                    <div class="field-value">${grant.required_evidence || '-'}</div>
-                </div>
-                <div class="field">
-                    <div class="field-label">Deadline</div>
-                    <div class="field-value">${grant.deadline || 'No deadline'}</div>
-                </div>
+                <div class="field"><div class="field-label">Description</div><div class="field-value">${grant.description || '-'}</div></div>
+                <div class="field"><div class="field-label">Eligibility</div><div class="field-value">${grant.eligibility || '-'}</div></div>
+                <div class="field"><div class="field-label">Evaluation Criteria</div><div class="field-value">${grant.criteria || '-'}</div></div>
+                <div class="field"><div class="field-label">Budget Rules</div><div class="field-value">${grant.budget_rules || '-'}</div></div>
+                <div class="field"><div class="field-label">Required Evidence</div><div class="field-value">${grant.required_evidence || '-'}</div></div>
+                <div class="field"><div class="field-label">Deadline</div><div class="field-value">${grant.deadline || 'No deadline'}</div></div>
             </div>
         `;
         
@@ -310,41 +271,17 @@
             <div id="apply-error" class="error"></div>
             <form id="apply-form">
                 <div class="form-row">
-                    <div class="form-group">
-                        <label>Project Name *</label>
-                        <input type="text" id="app-project-name" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Requested Amount (GEN)</label>
-                        <input type="text" id="app-amount" placeholder="5000">
-                    </div>
+                    <div class="form-group"><label>Project Name *</label><input type="text" id="app-project-name" required></div>
+                    <div class="form-group"><label>Requested Amount (GEN)</label><input type="text" id="app-amount" placeholder="5000"></div>
                 </div>
-                <div class="form-group">
-                    <label>Project Description *</label>
-                    <textarea id="app-description" required></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Team Information</label>
-                    <textarea id="app-team" placeholder="Team size, relevant experience"></textarea>
-                </div>
+                <div class="form-group"><label>Project Description *</label><textarea id="app-description" required></textarea></div>
+                <div class="form-group"><label>Team Information</label><textarea id="app-team" placeholder="Team size, relevant experience"></textarea></div>
                 <div class="form-row">
-                    <div class="form-group">
-                        <label>Website</label>
-                        <input type="url" id="app-website" placeholder="https://">
-                    </div>
-                    <div class="form-group">
-                        <label>GitHub URL</label>
-                        <input type="url" id="app-github" placeholder="https://github.com/">
-                    </div>
+                    <div class="form-group"><label>Website</label><input type="url" id="app-website" placeholder="https://"></div>
+                    <div class="form-group"><label>GitHub URL</label><input type="url" id="app-github" placeholder="https://github.com/"></div>
                 </div>
-                <div class="form-group">
-                    <label>Evidence URLs (comma-separated)</label>
-                    <input type="text" id="app-evidence" placeholder="https://evidence1.com, https://evidence2.com">
-                </div>
-                <div class="form-group">
-                    <label>Additional Information</label>
-                    <textarea id="app-additional" placeholder="Anything else you want to share"></textarea>
-                </div>
+                <div class="form-group"><label>Evidence URLs (comma-separated)</label><input type="text" id="app-evidence" placeholder="https://evidence1.com, https://evidence2.com"></div>
+                <div class="form-group"><label>Additional Information</label><textarea id="app-additional" placeholder="Anything else you want to share"></textarea></div>
                 <button type="submit" class="btn">Submit Application</button>
             </form>
         `;
@@ -381,7 +318,7 @@
             
             if (result.status === 'success') {
                 const successEl = document.getElementById('apply-success');
-                successEl.innerHTML = `<div style="font-size:1.3rem;font-weight:700;margin-bottom:0.75rem;">✅ Application submitted successfully.</div><div style="margin-bottom:0.5rem;">Your Application ID:</div><div style="font-size:2rem;font-weight:700;color:#00d4aa;margin-bottom:0.75rem;">${result.app_id}</div><div style="color:#ffd93d;margin-bottom:1rem;">⚠️ Save this ID. You will use it to check your application status and evaluation.</div><button class="btn btn-sm" onclick="showPage('check-status');document.getElementById('check-app-id').value=${result.app_id};">Check Status Now</button>`;
+                successEl.innerHTML = `<div style="font-size:1.3rem;font-weight:700;margin-bottom:0.75rem;">✅ Application submitted successfully.</div><div style="margin-bottom:0.5rem;">Your Application ID:</div><div style="font-size:1.5rem;font-weight:700;color:#00d4aa;margin-bottom:0.5rem;font-family:monospace;word-break:break-all;">${result.app_id}</div><div style="color:#ffd93d;margin-bottom:1rem;">⚠️ Save this ID. You will use it to check your application status and evaluation.</div><button class="btn btn-sm" onclick="document.getElementById('check-app-id').value='${result.app_id}';showPage('check-status');">Check Status Now</button>`;
                 successEl.classList.add('active');
                 document.getElementById('apply-form').reset();
             } else {
@@ -437,8 +374,8 @@
     };
     
     async function checkStatus() {
-        const appId = document.getElementById('check-app-id').value;
-        if (appId === '') {
+        const appId = document.getElementById('check-app-id').value.trim();
+        if (!appId) {
             showError('Enter application ID');
             return;
         }
@@ -447,39 +384,18 @@
         
         for (let i = 0; i < 5; i++) {
             try {
-                const res = await fetch(API + '/api/applications/' + appId);
+                const res = await fetch(API + '/api/applications/' + encodeURIComponent(appId));
                 if (!res.ok) throw new Error('Not found');
                 const app = await res.json();
                 
                 const resultEl = document.getElementById('status-result');
-                let html = `
-                    <div class="result-box">
-                        <h2>Application #${app.id}</h2>
-                        <p><strong>Project:</strong> ${app.project_name}</p>
-                        <p><strong>Status:</strong> <span class="status-badge status-${app.status}">${app.status}</span></p>
-                `;
+                let html = `<div class="result-box"><h2>Application #${app.id}</h2><p><strong>UUID:</strong> <span style="font-family:monospace;color:#00d4aa;">${appId}</span></p><p><strong>Project:</strong> ${app.project_name}</p><p><strong>Status:</strong> <span class="status-badge status-${app.status}">${app.status}</span></p>`;
                 
                 if (app.status === 'EVALUATED' && app.evaluation) {
                     const ev = typeof app.evaluation === 'string' ? JSON.parse(app.evaluation) : app.evaluation;
-                    html += `
-                        <div class="final-assessment">
-                            <div class="label">Final Assessment</div>
-                            <div class="value ${ev.final}">${ev.final}</div>
-                        </div>
-                        <div class="criteria-grid">
-                            <div class="criteria-item"><div class="label">Eligibility</div><div class="value ${ev.eligibility}">${ev.eligibility}</div></div>
-                            <div class="criteria-item"><div class="label">Completeness</div><div class="value ${ev.completeness}">${ev.completeness}</div></div>
-                            <div class="criteria-item"><div class="label">Feasibility</div><div class="value ${ev.feasibility}">${ev.feasibility}</div></div>
-                            <div class="criteria-item"><div class="label">Budget</div><div class="value ${ev.budget}">${ev.budget}</div></div>
-                            <div class="criteria-item"><div class="label">Evidence</div><div class="value ${ev.evidence}">${ev.evidence}</div></div>
-                        </div>
-                        <div class="reasons">
-                            <h4>Reasons</h4>
-                            <ul>${ev.reasons.map(r => `<li>${r}</li>`).join('')}</ul>
-                        </div>
-                    `;
+                    html += `<div class="final-assessment"><div class="label">Final Assessment</div><div class="value ${ev.final}">${ev.final}</div></div><div class="criteria-grid"><div class="criteria-item"><div class="label">Eligibility</div><div class="value ${ev.eligibility}">${ev.eligibility}</div></div><div class="criteria-item"><div class="label">Completeness</div><div class="value ${ev.completeness}">${ev.completeness}</div></div><div class="criteria-item"><div class="label">Feasibility</div><div class="value ${ev.feasibility}">${ev.feasibility}</div></div><div class="criteria-item"><div class="label">Budget</div><div class="value ${ev.budget}">${ev.budget}</div></div><div class="criteria-item"><div class="label">Evidence</div><div class="value ${ev.evidence}">${ev.evidence}</div></div></div><div class="reasons"><h4>Reasons</h4><ul>${ev.reasons.map(r => `<li>${r}</li>`).join('')}</ul></div>`;
                 } else if (app.status === 'SUBMITTED') {
-                    html += `<button class="btn btn-sm" onclick="evaluateApp(${app.id})" style="margin-top:1rem;">Evaluate Application</button>`;
+                    html += `<button class="btn btn-sm" onclick="evaluateApp('${appId}')" style="margin-top:1rem;">Evaluate Application</button>`;
                 }
                 
                 html += '</div>';
@@ -493,12 +409,13 @@
         showError('Failed to load application. Please refresh.');
         hideLoading();
     }
+    
     async function evaluateApp(appId) {
         showLoading('Evaluating application...');
         
         for (let i = 0; i < 5; i++) {
             try {
-                const res = await fetch(API + '/api/applications/' + appId + '/evaluate', {
+                const res = await fetch(API + '/api/applications/' + encodeURIComponent(appId) + '/evaluate', {
                     method: 'POST'
                 });
                 const data = await res.json();
@@ -518,7 +435,6 @@
         showError('Failed to evaluate. Please try again.');
         hideLoading();
     }
-    
     </script>
 </body>
 </html>
