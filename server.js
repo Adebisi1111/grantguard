@@ -182,7 +182,15 @@ app.post('/api/applications/:id/evaluate', async (req, res) => {
       args: [seqId],
       gasLimit: GAS_LIMIT
     });
-    res.json({ status: 'success', evaluation: JSON.parse(raw) });
+    
+    let evaluation;
+    try {
+      evaluation = JSON.parse(raw);
+    } catch (e) {
+      evaluation = { result: raw };
+    }
+    
+    res.json({ status: 'success', evaluation });
   } catch (err) {
     console.error('evaluateApplication error:', err);
     res.status(500).json({ detail: err.message });
