@@ -231,16 +231,27 @@
     }
     
     async function loadGrants() {
-        showLoading('Loading grants...');
-        try {
-            const res = await fetch(API + '/api/grants');
-            if (!res.ok) throw new Error('Server error');
-            grants = await res.json();
-            
-            const listEl = document.getElementById('grants-list');
-            if (grants.length === 0) {
-                listEl.innerHTML = '<p style="color:#666;">No grants available yet. Create the first one!</p>';
-            } else {
+        showLoading('Loading grants... (waking up server if needed)');
+        let retries = 10;
+        let grants = [];
+        
+        for (let i = 0; i < retries; i++) {
+            try {
+                const res = await fetch(API + '/api/grants');
+                if (!res.ok) throw new Error('Server error: ' + res.status);
+                grants = await res.json();
+                break;
+            } catch(e) {
+                if (i < retries - 1) {
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+            }
+        }
+        
+        const listEl = document.getElementById('grants-list');
+        if (grants.length === 0) {
+            listEl.innerHTML = `<p style="color:#666;">No grants available yet. Create one! →</p>`;
+        } else {
                 let html = '';
                 grants.forEach(g => {
                     html += `<div class="grant-card" onclick="viewGrant(${g.id})">
