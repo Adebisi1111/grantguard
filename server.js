@@ -129,7 +129,8 @@ app.post('/api/applications/:id/evaluate', async (req, res) => {
   }
 });
 
-app.use(express.static('../frontend'));
+// Serve static files from root (for Render)
+app.use(express.static('.'));
 
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => console.log(`GrantGuard API on port ${PORT}`));
