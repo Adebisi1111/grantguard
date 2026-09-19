@@ -13,8 +13,8 @@ app.use(express.json());
 const CONTRACT = process.env.CONTRACT_ADDRESS || '0x141D04fcbEB85BE92e8e12f1bB482020F9b37AF3';
 const PK = process.env.PRIVATE_KEY || '';
 
-// UUID mapping file (off-chain lookup: UUID -> sequential ID)
-const UUID_MAP_FILE = path.join(__dirname, '.uuid-map.json');
+// UUID mapping file includes contract address to avoid stale mappings
+const UUID_MAP_FILE = path.join(__dirname, `.uuid-map-${CONTRACT.slice(2, 10)}.json`);
 
 function loadUuidMap() {
   try {
@@ -30,14 +30,6 @@ function saveUuidMap(map) {
 
 function generateAppId() {
   return crypto.randomUUID();
-}
-
-function findUuidBySequentialId(seqId) {
-  const map = loadUuidMap();
-  for (const [uuid, id] of Object.entries(map)) {
-    if (id === seqId) return uuid;
-  }
-  return null;
 }
 
 if (!PK) console.error('WARNING: PRIVATE_KEY not set!');
@@ -122,7 +114,7 @@ app.post('/api/applications', async (req, res) => {
     // Generate unique non-guessable UUID for user-facing ID
     const appId = generateAppId();
 
-    // Persist UUID -> sequential ID mapping
+    // Persist UUID -> sequential ID mapping (contract-specific)
     const map = loadUuidMap();
     map[appId] = seqId;
     saveUuidMap(map);
