@@ -375,7 +375,7 @@
             
             if (result.status === 'success') {
                 const successEl = document.getElementById('apply-success');
-                successEl.textContent = 'Application submitted! ID: ' + result.app_id + ', TX: ' + result.tx_hash;
+                successEl.innerHTML = `<div style="font-size:1.3rem;font-weight:700;margin-bottom:0.75rem;">✅ Application submitted successfully.</div><div style="margin-bottom:0.5rem;">Your Application ID:</div><div style="font-size:2rem;font-weight:700;color:#00d4aa;margin-bottom:0.75rem;">${result.app_id}</div><div style="color:#ffd93d;margin-bottom:1rem;">⚠️ Save this ID. You will use it to check your application status and evaluation.</div><button class="btn btn-sm" onclick="showPage('check-status');document.getElementById('check-app-id').value=${result.app_id};">Check Status Now</button>`;
                 successEl.classList.add('active');
                 document.getElementById('apply-form').reset();
             } else {
