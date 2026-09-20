@@ -1,0 +1,61 @@
+{
+  "network": "studio-next",
+  "chainId": 61997,
+  "version": 1,
+  "deploy": {
+    "leaderTimeunitsAllocation": "125",
+    "validatorTimeunitsAllocation": "250",
+    "executionBudgetPerRound": "25000000000000000",
+    "totalMessageFees": "0",
+    "rotationsPerRound": "1"
+  },
+  "write": {
+    "leaderTimeunitsAllocation": "100",
+    "validatorTimeunitsAllocation": "200",
+    "executionBudgetPerRound": "94630500000000",
+    "totalMessageFees": "0",
+    "rotations": ["3"]
+  },
+  "create_grant": {
+    "leaderTimeunitsAllocation": "100",
+    "validatorTimeunitsAllocation": "200",
+    "executionBudgetPerRound": "94630500000000",
+    "totalMessageFees": "0",
+    "rotations": ["3"]
+  },
+  "fund_grant": {
+    "leaderTimeunitsAllocation": "100",
+    "validatorTimeunitsAllocation": "200",
+    "executionBudgetPerRound": "94630500000000",
+    "totalMessageFees": "0",
+    "rotations": ["3"]
+  },
+  "submit_application": {
+    "leaderTimeunitsAllocation": "100",
+    "validatorTimeunitsAllocation": "200",
+    "executionBudgetPerRound": "94630500000000",
+    "totalMessageFees": "0",
+    "rotations": ["3"]
+  },
+  "evaluate_application": {
+    "leaderTimeunitsAllocation": "125",
+    "validatorTimeunitsAllocation": "250",
+    "executionBudgetPerRound": "25000000000000000",
+    "totalMessageFees": "0",
+    "rotations": ["3"]
+  },
+  "release_funds": {
+    "leaderTimeunitsAllocation": "100",
+    "validatorTimeunitsAllocation": "200",
+    "executionBudgetPerRound": "94630500000000",
+    "totalMessageFees": "0",
+    "rotations": ["3"]
+  },
+  "cancel_grant": {
+    "leaderTimeunitsAllocation": "100",
+    "validatorTimeunitsAllocation": "200",
+    "executionBudgetPerRound": "94630500000000",
+    "totalMessageFees": "0",
+    "rotations": ["3"]
+  }
+}

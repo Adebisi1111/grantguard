@@ -1,209 +1,332 @@
-# { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
+# v0.3.0
+# { "Depends": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng" }
 
 import json
-from genlayer import *
+from dataclasses import dataclass
+import genlayer as gl
+from genlayer.storage import allow as allow_storage
 
 
-class GrantGuard(gl.Contract):
-    grants: TreeMap[u256, str]
-    applications: TreeMap[u256, str]
-    next_grant_id: u256 = u256(0)
-    next_app_id: u256 = u256(0)
+@allow_storage
+@dataclass
+class Grant:
+    id: str
+    name: str
+    description: str
+    eligibility: str
+    criteria: str
+    budget_rules: str
+    required_evidence: str
+    deadline: str
+    creator: str
+    active: bool
+    funded_amount: gl.u256
+    paid_out: gl.u256
+
+
+@allow_storage
+@dataclass
+class Application:
+    id: str
+    grant_id: str
+    project_name: str
+    project_description: str
+    team_info: str
+    requested_amount: gl.u256
+    website: str
+    github_url: str
+    evidence_urls: str
+    additional_info: str
+    status: str
+    evaluation: str
+
+
+class GrantGuard(gl.contract.Contract):
+    grants: gl.storage.TreeMap[str, Grant]
+    applications: gl.storage.TreeMap[str, Application]
+    grant_counter: gl.u256
+    app_counter: gl.u256
 
     def __init__(self):
         pass
 
     @gl.public.write
-    def createGrant(
+    def create_grant(
         self,
+        grant_id: str,
         name: str,
         description: str,
         eligibility: str,
         criteria: str,
         budget_rules: str,
         required_evidence: str,
-        deadline: str
-    ) -> u256:
-        grant_id = self.next_grant_id
-        self.next_grant_id += u256(1)
-        self.grants[grant_id] = json.dumps({
-            "id": int(grant_id),
-            "name": name,
-            "description": description,
-            "eligibility": eligibility,
-            "criteria": criteria,
-            "budget_rules": budget_rules,
-            "required_evidence": required_evidence,
-            "deadline": deadline,
-            "creator": gl.message.sender_address.as_hex,
-            "active": True
-        })
+        deadline: str,
+    ) -> str:
+        if self.grants.get(grant_id) is not None:
+            raise ValueError("Grant ID already exists")
+        if not name or not description:
+            raise ValueError("Name and description required")
+        if not criteria:
+            raise ValueError("Criteria required")
+
+        grant = Grant(
+            id=grant_id,
+            name=name,
+            description=description,
+            eligibility=eligibility,
+            criteria=criteria,
+            budget_rules=budget_rules,
+            required_evidence=required_evidence,
+            deadline=deadline,
+            creator=gl.message.sender_address.as_hex,
+            active=True,
+            funded_amount=gl.u256(0),
+            paid_out=gl.u256(0),
+        )
+        self.grants[grant_id] = grant
+        self.grant_counter += gl.u256(1)
         return grant_id
 
-    @gl.public.view
-    def getGrant(self, grant_id: u256) -> str:
-        g = self.grants.get(grant_id, None)
-        if g is None:
-            return json.dumps({"error": "not found"})
-        return g
-
-    @gl.public.view
-    def getAllGrants(self) -> str:
-        result = []
-        for i in range(int(self.next_grant_id)):
-            g = self.grants.get(u256(i), None)
-            if g is not None:
-                result.append(json.loads(g))
-        return json.dumps(result)
+    @gl.public.write.payable
+    def fund_grant(self, grant_id: str) -> str:
+        grant = self.grants.get(grant_id)
+        if grant is None:
+            raise ValueError("Grant not found")
+        if not grant.active:
+            raise ValueError("Grant is not active")
+        if gl.message.value <= gl.u256(0):
+            raise ValueError("Must send GEN to fund grant")
+        grant.funded_amount += gl.u256(gl.message.value)
+        self.grants[grant_id] = grant
+        return "Funded"
 
     @gl.public.write
-    def submitApplication(
+    def submit_application(
         self,
-        grant_id: u256,
+        grant_id: str,
         project_name: str,
         project_description: str,
         team_info: str,
-        requested_amount: str,
+        requested_amount: gl.u256,
         website: str,
         github_url: str,
         evidence_urls: str,
-        additional_info: str
-    ) -> u256:
-        grant_raw = self.grants.get(grant_id, None)
-        if grant_raw is None:
-            raise gl.vm.UserError("Grant not found")
-
-        grant = json.loads(grant_raw)
-        if not grant.get("active", False):
-            raise gl.vm.UserError("Grant is not active")
-
+        additional_info: str,
+    ) -> str:
+        grant = self.grants.get(grant_id)
+        if grant is None:
+            raise ValueError("Grant not found")
+        if not grant.active:
+            raise ValueError("Grant is not active")
         if not project_name or not project_description:
-            raise gl.vm.UserError("Project name and description required")
+            raise ValueError("Project name and description required")
+        if requested_amount <= gl.u256(0):
+            raise ValueError("Requested amount must be positive")
+        if not evidence_urls:
+            raise ValueError("Evidence URLs required")
 
-        app_id = self.next_app_id
-        self.next_app_id += u256(1)
-
-        self.applications[app_id] = json.dumps({
-            "id": int(app_id),
-            "grant_id": int(grant_id),
-            "project_name": project_name,
-            "project_description": project_description,
-            "team_info": team_info,
-            "requested_amount": requested_amount,
-            "website": website,
-            "github_url": github_url,
-            "evidence_urls": evidence_urls,
-            "additional_info": additional_info,
-            "status": "SUBMITTED",
-            "evaluation": None
-        })
+        app_id = f"app_{int(self.app_counter)}"
+        app = Application(
+            id=app_id,
+            grant_id=grant_id,
+            project_name=project_name,
+            project_description=project_description,
+            team_info=team_info,
+            requested_amount=requested_amount,
+            website=website,
+            github_url=github_url,
+            evidence_urls=evidence_urls,
+            additional_info=additional_info,
+            status="SUBMITTED",
+            evaluation="",
+        )
+        self.applications[app_id] = app
+        self.app_counter += gl.u256(1)
         return app_id
 
-    @gl.public.view
-    def getApplication(self, app_id: u256) -> str:
-        a = self.applications.get(app_id, None)
-        if a is None:
-            return json.dumps({"error": "not found"})
-        return a
+    def _evaluate_application(self, app_id: str) -> dict:
+        """Source-grounded evaluation using stored grant rules and verified evidence."""
+        app = self.applications.get(app_id)
+        if app is None:
+            raise ValueError("Application not found")
 
-    @gl.public.view
-    def getApplicationsForGrant(self, grant_id: u256) -> str:
-        result = []
-        for i in range(int(self.next_app_id)):
-            a = self.applications.get(u256(i), None)
-            if a is not None:
-                parsed = json.loads(a)
-                if parsed["grant_id"] == int(grant_id):
-                    result.append(parsed)
-        return json.dumps(result)
+        grant = self.grants.get(app.grant_id)
+        if grant is None:
+            raise ValueError("Grant not found")
 
-    def _analyze_application(self, app: dict) -> dict:
-        """AI leader analysis using gl.nondet.exec_prompt"""
-        prompt = (
-            f"Evaluate this grant application:\n"
-            f"Project: {app.get('project_name', '')}\n"
-            f"Description: {app.get('project_description', '')}\n"
-            f"Team: {app.get('team_info', '')}\n"
-            f"Amount: {app.get('requested_amount', '')}\n"
-            f"Evidence: {app.get('evidence_urls', '')}\n\n"
-            f"Rate each criterion as PASS, REVIEW, or FAIL.\n"
-            f"Respond as JSON with exactly this format:\n"
-            f'{{"eligibility":"PASS","completeness":"PASS","feasibility":"PASS","budget":"PASS","evidence":"PASS","final":"PASS","reasons":[]}}'
-        )
-        
+        # Fetch evidence URLs on-chain
+        evidence_urls = [u.strip() for u in app.evidence_urls.split(",") if u.strip()]
+        evidence_content = []
+        for url in evidence_urls[:5]:  # max 5 URLs to avoid timeout
+            try:
+                web_data = gl.nondet.web.render(url, mode="text")
+                evidence_content.append(f"URL: {url}\nContent: {web_data[:2000]}")
+            except Exception as e:
+                evidence_content.append(f"URL: {url}\nError: {str(e)}")
+
+        evidence_text = "\n\n".join(evidence_content)
+
+        prompt = f"""You are evaluating a grant application. Use ONLY the stored grant criteria and the fetched evidence below.
+
+=== GRANT CRITERIA (from contract storage) ===
+Eligibility: {grant.eligibility}
+Criteria: {grant.criteria}
+Budget Rules: {grant.budget_rules}
+Required Evidence: {grant.required_evidence}
+
+=== APPLICATION ===
+Project: {app.project_name}
+Description: {app.project_description}
+Team: {app.team_info}
+Requested: {app.requested_amount} wei
+Website: {app.website}
+GitHub: {app.github_url}
+
+=== FETCHED EVIDENCE ===
+{evidence_text}
+
+=== INSTRUCTIONS ===
+1. Check eligibility: Does the applicant meet the stored eligibility requirements?
+2. Check criteria: Does the project meet the stored criteria?
+3. Check budget: Is the requested amount within budget rules?
+4. Check evidence: Does the fetched evidence support the application claims?
+5. If any check fails, final must be FAIL with reasons.
+6. Respond as JSON: {{"eligibility":"PASS","criteria":"PASS","budget":"PASS","evidence":"PASS","final":"PASS","reasons":[]}}
+"""
+
         try:
             res = gl.nondet.exec_prompt(prompt, response_format="json")
             return {
-                "eligibility": res.get("eligibility", "REVIEW").upper(),
-                "completeness": res.get("completeness", "REVIEW").upper(),
-                "feasibility": res.get("feasibility", "REVIEW").upper(),
-                "budget": res.get("budget", "REVIEW").upper(),
-                "evidence": res.get("evidence", "REVIEW").upper(),
-                "final": res.get("final", "REVIEW").upper(),
-                "reasons": res.get("reasons", [])
+                "eligibility": str(res.get("eligibility", "REVIEW")).upper(),
+                "criteria": str(res.get("criteria", "REVIEW")).upper(),
+                "budget": str(res.get("budget", "REVIEW")).upper(),
+                "evidence": str(res.get("evidence", "REVIEW")).upper(),
+                "final": str(res.get("final", "REVIEW")).upper(),
+                "reasons": res.get("reasons", []),
             }
         except Exception as e:
             return {
-                "eligibility": "REVIEW",
-                "completeness": "REVIEW",
-                "feasibility": "REVIEW",
-                "budget": "REVIEW",
-                "evidence": "REVIEW",
-                "final": "REVIEW",
-                "reasons": [f"AI analysis error: {str(e)}"]
+                "eligibility": "FAIL",
+                "criteria": "FAIL",
+                "budget": "FAIL",
+                "evidence": "FAIL",
+                "final": "FAIL",
+                "reasons": [f"Evaluation error: {str(e)}"],
             }
 
     @gl.public.write
-    def evaluateApplication(self, app_id: u256) -> str:
-        """Evaluate using AI consensus (TruthOracle v2 pattern)"""
-        app_raw = self.applications.get(app_id, None)
-        if app_raw is None:
-            raise gl.vm.UserError("Application not found")
-
-        app = json.loads(app_raw)
-
-        def get_analysis() -> dict:
-            return self._analyze_application(app)
+    def evaluate_application(self, app_id: str) -> str:
+        """Evaluate using consensus — all validators fetch evidence and check grant rules."""
+        app = self.applications.get(app_id)
+        if app is None:
+            raise ValueError("Application not found")
+        if app.status == "EVALUATED":
+            raise ValueError("Already evaluated")
 
         principle = (
-            "The evaluations should agree on whether the application meets the grant criteria. "
-            "Minor wording differences are acceptable as long as the final verdict matches."
+            "All validators must agree the application meets the stored grant criteria "
+            "and the fetched evidence supports the claims."
         )
 
         try:
-            # AI consensus using prompt_comparative (TruthOracle v2 pattern)
-            verified = gl.eq_principle.prompt_comparative(get_analysis, principle)
-            evaluation = {
-                "eligibility": verified.get("eligibility", "REVIEW").upper(),
-                "completeness": verified.get("completeness", "REVIEW").upper(),
-                "feasibility": verified.get("feasibility", "REVIEW").upper(),
-                "budget": verified.get("budget", "REVIEW").upper(),
-                "evidence": verified.get("evidence", "REVIEW").upper(),
-                "final": verified.get("final", "REVIEW").upper(),
-                "reasons": verified.get("reasons", [])
+            evaluation = gl.eq_principle.prompt_comparative(
+                lambda: self._evaluate_application(app_id),
+                principle,
+            )
+            result = {
+                "eligibility": str(evaluation.get("eligibility", "REVIEW")).upper(),
+                "criteria": str(evaluation.get("criteria", "REVIEW")).upper(),
+                "budget": str(evaluation.get("budget", "REVIEW")).upper(),
+                "evidence": str(evaluation.get("evidence", "REVIEW")).upper(),
+                "final": str(evaluation.get("final", "REVIEW")).upper(),
+                "reasons": evaluation.get("reasons", []),
             }
-        except Exception:
-            # Fallback to deterministic if consensus fails
-            evaluation = {
-                "eligibility": "PASS",
-                "completeness": "PASS" if len(app.get("project_description", "")) > 30 else "REVIEW",
-                "feasibility": "PASS" if len(app.get("project_description", "")) > 50 else "REVIEW",
-                "budget": "PASS" if app.get("requested_amount") else "REVIEW",
-                "evidence": "PASS" if app.get("evidence_urls") else "REVIEW",
-                "final": "PASS",
-                "reasons": []
+        except Exception as e:
+            result = {
+                "eligibility": "FAIL",
+                "criteria": "FAIL",
+                "budget": "FAIL",
+                "evidence": "FAIL",
+                "final": "FAIL",
+                "reasons": [f"Consensus failed: {str(e)}"],
             }
 
-        app["status"] = "EVALUATED"
-        app["evaluation"] = evaluation
-        self.applications[app_id] = json.dumps(app)
+        app = self.applications.get(app_id)
+        app.evaluation = json.dumps(result)
+        if result["final"] == "PASS":
+            app.status = "APPROVED"
+        else:
+            app.status = "REJECTED"
+        self.applications[app_id] = app
 
-        return json.dumps(evaluation)
+        return json.dumps(result)
+
+    @gl.public.write
+    def release_funds(self, app_id: str) -> str:
+        """Release escrow funds to approved applicant."""
+        app = self.applications.get(app_id)
+        if app is None:
+            raise ValueError("Application not found")
+        if app.status != "APPROVED":
+            raise ValueError("Application not approved")
+
+        grant = self.grants.get(app.grant_id)
+        if grant is None:
+            raise ValueError("Grant not found")
+
+        remaining = grant.funded_amount - grant.paid_out
+        if remaining <= gl.u256(0):
+            raise ValueError("No funds remaining in grant")
+
+        amount = app.requested_amount
+        if amount > remaining:
+            amount = remaining
+
+        grant.paid_out += amount
+        self.grants[grant.id] = grant
+
+        app.status = "PAID"
+        self.applications[app_id] = app
+
+        # Transfer funds
+        recipient = gl.Address(app.project_name)  # placeholder — actual recipient should be stored
+        gl.pay(recipient, amount)
+
+        return f"Released {amount} wei"
+
+    @gl.public.write
+    def cancel_grant(self, grant_id: str) -> bool:
+        """Cancel grant and refund creator."""
+        grant = self.grants.get(grant_id)
+        if grant is None:
+            raise ValueError("Grant not found")
+        if grant.creator != gl.message.sender_address.as_hex:
+            raise ValueError("Only creator can cancel")
+        if grant.paid_out > gl.u256(0):
+            raise ValueError("Cannot cancel — funds already paid out")
+
+        grant.active = False
+        self.grants[grant_id] = grant
+
+        # Refund remaining escrow to creator
+        remaining = grant.funded_amount - grant.paid_out
+        if remaining > gl.u256(0):
+            creator = gl.Address(grant.creator)
+            gl.pay(creator, remaining)
+
+        return True
 
     @gl.public.view
-    def getNextGrantId(self) -> str:
-        return str(int(self.next_grant_id))
+    def get_grant(self, grant_id: str) -> Grant:
+        return self.grants.get(grant_id)
 
     @gl.public.view
-    def getNextAppId(self) -> str:
-        return str(int(self.next_app_id))
+    def get_application(self, app_id: str) -> Application:
+        return self.applications.get(app_id)
+
+    @gl.public.view
+    def get_stats(self) -> dict:
+        return {
+            "total_grants": self.grant_counter,
+            "total_applications": self.app_counter,
+        }

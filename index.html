@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GrantGuard | Grant Application Evaluator</title>
+    <title>GrantGuard v2 | Grant Evaluation Platform</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0f; color: #e0e0e0; min-height: 100vh; }
@@ -33,6 +33,8 @@
         .btn:hover { opacity: 0.9; }
         .btn:disabled { background: #333; color: #666; cursor: not-allowed; }
         .btn-sm { padding: 0.5rem 1rem; font-size: 0.85rem; }
+        .btn-fund { background: linear-gradient(135deg, #ffd93d, #ff9f43); }
+        .btn-release { background: linear-gradient(135deg, #00d4aa, #45b7d1); }
         
         .result-box { background: #0f1520; border: 1px solid #2a2a3a; border-radius: 8px; padding: 1.5rem; margin-top: 1rem; }
         .result-box h2 { color: #00d4aa; margin-bottom: 1rem; }
@@ -45,7 +47,10 @@
         .PASS { color: #00d4aa; }
         .REVIEW { color: #ffd93d; }
         .FAIL { color: #ff6b6b; }
-        .INSUFFICIENT_EVIDENCE { color: #ff9f43; }
+        .APPROVED { color: #00d4aa; }
+        .REJECTED { color: #ff6b6b; }
+        .SUBMITTED { color: #7c3aed; }
+        .PAID { color: #45b7d1; }
         
         .final-assessment { background: #0a0a0f; padding: 1rem; border-radius: 6px; margin-bottom: 1rem; }
         .final-assessment .label { color: #888; font-size: 0.85rem; }
@@ -58,10 +63,6 @@
         .reasons li::before { content: "•"; position: absolute; left: 0; color: #7c3aed; }
         
         .status-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
-        .status-SUBMITTED { background: #7c3aed33; color: #7c3aed; }
-        .status-EVALUATING { background: #ffd93d33; color: #ffd93d; }
-        .status-EVALUATED { background: #00d4aa33; color: #00d4aa; }
-        .status-FAILED_TO_EVALUATE { background: #ff6b6b33; color: #ff6b6b; }
         
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
         .full-width { grid-column: 1 / -1; }
@@ -90,12 +91,15 @@
         .logo { font-size: 1.2rem; font-weight: 700; color: #00d4aa; }
         
         .hidden { display: none; }
+        
+        .info-box { background: #7c3aed33; border: 1px solid #7c3aed; padding: 1rem; border-radius: 6px; color: #7c3aed; margin-bottom: 1rem; }
+        .info-box a { color: #00d4aa; }
     </style>
 </head>
 <body>
     <div class="container">
         <nav class="nav">
-            <div class="logo">GrantGuard</div>
+            <div class="logo">GrantGuard v2</div>
             <div class="nav-links">
                 <a href="#" onclick="showPage('grants')" class="active" id="nav-grants">Grants</a>
                 <a href="#" onclick="showPage('create-grant')" id="nav-create">Create Grant</a>
@@ -106,6 +110,9 @@
         <div id="grants-page" class="page active">
             <h1>Available Grants</h1>
             <p class="subtitle">Browse active grant opportunities</p>
+            <div class="info-box">
+                <strong>Contract:</strong> <a href="https://explorer-studio-next.genlayer.com/address/0x671990450Bab8f89144F50B6A619c6382E824172" target="_blank">0x6719...4172</a> on Studio Next (chain 61997)
+            </div>
             <div id="grants-list"></div>
         </div>
         
@@ -119,6 +126,10 @@
             <p class="subtitle">Publish a new grant opportunity</p>
             <div id="create-grant-success" class="success"></div>
             <form id="create-grant-form">
+                <div class="form-group">
+                    <label>Grant ID *</label>
+                    <input type="text" id="grant-id" placeholder="my-grant-1" required>
+                </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label>Grant Name *</label>
@@ -155,10 +166,10 @@
         
         <div id="check-status-page" class="page">
             <h1>Check Application Status</h1>
-            <p class="subtitle">Enter your unique Application ID</p>
+            <p class="subtitle">Enter your Application ID (e.g., app_0)</p>
             <div class="form-group">
-                <label>Application ID (UUID)</label>
-                <input type="text" id="check-app-id" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                <label>Application ID</label>
+                <input type="text" id="check-app-id" placeholder="app_0">
             </div>
             <button class="btn btn-sm" onclick="checkStatus()">Check</button>
             <div id="status-result"></div>
@@ -173,7 +184,7 @@
     </div>
 
     <script>
-    const API = 'https://grantguard-56ax.onrender.com';
+    const API = 'https://grantguard.onrender.com';
     
     let grants = [];
     let currentGrantId = null;
@@ -210,7 +221,7 @@
     }
     
     async function loadGrants() {
-        showLoading('Loading grants... (waking up server if needed)');
+        showLoading('Loading grants...');
         
         for (let i = 0; i < 15; i++) {
             try {
@@ -224,7 +235,7 @@
                 } else {
                     let html = '';
                     grants.forEach(g => {
-                        html += `<div class="grant-card" onclick="viewGrant(${g.id})">
+                        html += `<div class="grant-card" onclick="viewGrant('${g.id}')">
                             <h3>${g.name}</h3>
                             <p>${g.description ? g.description.slice(0, 100) + '...' : ''}</p>
                             <div class="deadline">Deadline: ${g.deadline || 'No deadline'}</div>
@@ -261,6 +272,8 @@
                 <div class="field"><div class="field-label">Budget Rules</div><div class="field-value">${grant.budget_rules || '-'}</div></div>
                 <div class="field"><div class="field-label">Required Evidence</div><div class="field-value">${grant.required_evidence || '-'}</div></div>
                 <div class="field"><div class="field-label">Deadline</div><div class="field-value">${grant.deadline || 'No deadline'}</div></div>
+                <div class="field"><div class="field-label">Funded Amount</div><div class="field-value">${(Number(grant.funded_amount) / 1e18).toFixed(2)} GEN</div></div>
+                <div class="field"><div class="field-label">Paid Out</div><div class="field-value">${(Number(grant.paid_out) / 1e18).toFixed(2)} GEN</div></div>
             </div>
         `;
         
@@ -272,7 +285,7 @@
             <form id="apply-form">
                 <div class="form-row">
                     <div class="form-group"><label>Project Name *</label><input type="text" id="app-project-name" required></div>
-                    <div class="form-group"><label>Requested Amount (GEN)</label><input type="text" id="app-amount" placeholder="5000"></div>
+                    <div class="form-group"><label>Requested Amount (wei)</label><input type="text" id="app-amount" placeholder="500000000000000000"></div>
                 </div>
                 <div class="form-group"><label>Project Description *</label><textarea id="app-description" required></textarea></div>
                 <div class="form-group"><label>Team Information</label><textarea id="app-team" placeholder="Team size, relevant experience"></textarea></div>
@@ -280,7 +293,7 @@
                     <div class="form-group"><label>Website</label><input type="url" id="app-website" placeholder="https://"></div>
                     <div class="form-group"><label>GitHub URL</label><input type="url" id="app-github" placeholder="https://github.com/"></div>
                 </div>
-                <div class="form-group"><label>Evidence URLs (comma-separated)</label><input type="text" id="app-evidence" placeholder="https://evidence1.com, https://evidence2.com"></div>
+                <div class="form-group"><label>Evidence URLs (comma-separated) *</label><input type="text" id="app-evidence" placeholder="https://evidence1.com, https://evidence2.com" required></div>
                 <div class="form-group"><label>Additional Information</label><textarea id="app-additional" placeholder="Anything else you want to share"></textarea></div>
                 <button type="submit" class="btn">Submit Application</button>
             </form>
@@ -336,6 +349,7 @@
         e.preventDefault();
         
         const data = {
+            grant_id: document.getElementById('grant-id').value,
             name: document.getElementById('grant-name').value,
             description: document.getElementById('grant-description').value,
             eligibility: document.getElementById('grant-eligibility').value,
@@ -389,13 +403,24 @@
                 const app = await res.json();
                 
                 const resultEl = document.getElementById('status-result');
-                let html = `<div class="result-box"><h2>Application #${app.id}</h2><p><strong>UUID:</strong> <span style="font-family:monospace;color:#00d4aa;">${appId}</span></p><p><strong>Project:</strong> ${app.project_name}</p><p><strong>Status:</strong> <span class="status-badge status-${app.status}">${app.status}</span></p>`;
+                let html = `<div class="result-box"><h2>Application ${app.id}</h2><p><strong>Project:</strong> ${app.project_name}</p><p><strong>Status:</strong> <span class="status-badge status-${app.status}">${app.status}</span></p>`;
                 
-                if (app.status === 'EVALUATED' && app.evaluation) {
-                    const ev = typeof app.evaluation === 'string' ? JSON.parse(app.evaluation) : app.evaluation;
-                    html += `<div class="final-assessment"><div class="label">Final Assessment</div><div class="value ${ev.final}">${ev.final}</div></div><div class="criteria-grid"><div class="criteria-item"><div class="label">Eligibility</div><div class="value ${ev.eligibility}">${ev.eligibility}</div></div><div class="criteria-item"><div class="label">Completeness</div><div class="value ${ev.completeness}">${ev.completeness}</div></div><div class="criteria-item"><div class="label">Feasibility</div><div class="value ${ev.feasibility}">${ev.feasibility}</div></div><div class="criteria-item"><div class="label">Budget</div><div class="value ${ev.budget}">${ev.budget}</div></div><div class="criteria-item"><div class="label">Evidence</div><div class="value ${ev.evidence}">${ev.evidence}</div></div></div><div class="reasons"><h4>Reasons</h4><ul>${ev.reasons.map(r => `<li>${r}</li>`).join('')}</ul></div>`;
-                } else if (app.status === 'SUBMITTED') {
+                if (app.status === 'APPROVED' || app.status === 'REJECTED' || app.status === 'PAID') {
+                    try {
+                        const ev = typeof app.evaluation === 'string' ? JSON.parse(app.evaluation) : app.evaluation;
+                        html += `<div class="final-assessment"><div class="label">Final Assessment</div><div class="value ${ev.final}">${ev.final}</div></div><div class="criteria-grid"><div class="criteria-item"><div class="label">Eligibility</div><div class="value ${ev.eligibility}">${ev.eligibility}</div></div><div class="criteria-item"><div class="label">Criteria</div><div class="value ${ev.criteria}">${ev.criteria}</div></div><div class="criteria-item"><div class="label">Budget</div><div class="value ${ev.budget}">${ev.budget}</div></div><div class="criteria-item"><div class="label">Evidence</div><div class="value ${ev.evidence}">${ev.evidence}</div></div></div>`;
+                        if (ev.reasons && ev.reasons.length > 0) {
+                            html += `<div class="reasons"><h4>Reasons</h4><ul>${ev.reasons.map(r => `<li>${r}</li>`).join('')}</ul></div>`;
+                        }
+                    } catch(e) {}
+                }
+                
+                if (app.status === 'SUBMITTED') {
                     html += `<button class="btn btn-sm" onclick="evaluateApp('${appId}')" style="margin-top:1rem;">Evaluate Application</button>`;
+                }
+                
+                if (app.status === 'APPROVED') {
+                    html += `<button class="btn btn-sm btn-release" onclick="releaseFunds('${appId}')" style="margin-top:1rem;">Release Funds</button>`;
                 }
                 
                 html += '</div>';
@@ -411,7 +436,7 @@
     }
     
     async function evaluateApp(appId) {
-        showLoading('Evaluating application...');
+        showLoading('Evaluating application... (1-3 min)');
         
         for (let i = 0; i < 5; i++) {
             try {
@@ -433,6 +458,25 @@
             }
         }
         showError('Failed to evaluate. Please try again.');
+        hideLoading();
+    }
+    
+    async function releaseFunds(appId) {
+        showLoading('Releasing funds...');
+        
+        try {
+            const res = await fetch(API + '/api/applications/' + encodeURIComponent(appId) + '/release', {
+                method: 'POST'
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                checkStatus();
+            } else {
+                throw new Error(data.detail || 'Release failed');
+            }
+        } catch(e) {
+            showError('Error: ' + e.message);
+        }
         hideLoading();
     }
     </script>
