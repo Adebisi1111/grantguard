@@ -68,8 +68,18 @@
 <div class="container">
     <div id="page-grants" class="page active">
         <h1>Available Grants</h1>
-        <p class="subtitle">Click a grant to view details and apply</p>
-        <div id="grants-list"><p style="color:#888">Loading grants...</p></div>
+        <p class="subtitle">Enter a grant ID to view details and apply</p>
+        <div class="grid" style="margin-bottom:1rem">
+            <div><label>Grant ID</label><input type="text" id="lookup-grant-id" placeholder="test-grant-1"></div>
+        </div>
+        <button class="btn btn-p" onclick="lookupGrant()">View Grant</button>
+        <div id="grants-list" style="margin-top:1rem"></div>
+        <hr style="border-color:#2a2a3a;margin:1.5rem 0">
+        <h3>Or discover grants by ID pattern:</h3>
+        <div class="row">
+            <button class="btn btn-s" onclick="discoverGrants()">Discover grant_0 to grant_9</button>
+        </div>
+        <div id="discover-result" style="margin-top:1rem"></div>
     </div>
 
     <div id="page-detail" class="page">
@@ -239,43 +249,68 @@ function decodeUint(hex) {
 
 async function loadGrants() {
     var listEl = document.getElementById('grants-list');
-    listEl.innerHTML = '<p style="color:#888">Loading grants from chain...</p>';
+    listEl.innerHTML = '<p style="color:#888">Enter a grant ID above to view it, or click Discover to find grants.</p>';
+}
+
+async function lookupGrant() {
+    var grantId = document.getElementById('lookup-grant-id').value.trim();
+    if (!grantId) { note('Enter a grant ID', 'warn'); return; }
+    if (!window.ethereum) { note('Connect wallet first!', 'err'); return; }
     
-    if (!window.ethereum) {
-        listEl.innerHTML = '<p style="color:#888">Please connect wallet to view grants</p>';
-        return;
+    loading('Looking up grant...');
+    try {
+        var result = await ethCall('get_grant', [grantId]);
+        var name = decodeString(result);
+        if (!name) {
+            document.getElementById('grants-list').innerHTML = '<p style="color:#888">Grant not found: ' + grantId + '</p>';
+        } else {
+            document.getElementById('grants-list').innerHTML = 
+                '<div class="card grant-card" onclick="viewGrant(\'' + grantId + '\')">' +
+                '<h3>' + name + '</h3>' +
+                '<div class="meta">ID: ' + grantId + ' · Click to view details and apply</div>' +
+                '</div>';
+        }
+    } catch (e) {
+        document.getElementById('grants-list').innerHTML = '<p style="color:#888">Grant not found: ' + grantId + '</p>';
+        note('Error: ' + e.message, 'err');
     }
-    
+    loaded();
+}
+
+async function discoverGrants() {
+    if (!window.ethereum) { note('Connect wallet first!', 'err'); return; }
+    loading('Discovering grants...');
     try {
         var statsResult = await ethCall('get_stats', []);
         var totalGrants = decodeUint(statsResult);
         
-        grants = [];
+        var found = [];
         for (var i = 0; i < totalGrants; i++) {
             var grantId = 'grant_' + i;
             try {
                 var result = await ethCall('get_grant', [grantId]);
                 var name = decodeString(result);
                 if (name) {
-                    grants.push({ id: grantId, name: name });
+                    found.push({ id: grantId, name: name });
                 }
             } catch(e) {}
         }
         
-        if (grants.length === 0) {
-            listEl.innerHTML = '<p style="color:#888">No grants found. Create the first one!</p>';
+        var el = document.getElementById('discover-result');
+        if (found.length === 0) {
+            el.innerHTML = '<p style="color:#888">No grants found with grant_N pattern. Use lookup to find grants with custom IDs.</p>';
         } else {
-            listEl.innerHTML = grants.map(function(g) {
+            el.innerHTML = found.map(function(g) {
                 return '<div class="card grant-card" onclick="viewGrant(\'' + g.id + '\')">' +
                     '<h3>' + g.name + '</h3>' +
-                    '<div class="meta">ID: ' + g.id + ' · Click to view details and apply</div>' +
+                    '<div class="meta">ID: ' + g.id + '</div>' +
                 '</div>';
             }).join('');
         }
     } catch (e) {
-        listEl.innerHTML = '<p style="color:#888">Error loading grants. Make sure you are on Studio Next network.</p>';
         note('Error: ' + e.message, 'err');
     }
+    loaded();
 }
 
 function viewGrant(id) {
