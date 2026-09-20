@@ -5,480 +5,429 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GrantGuard v2 | Grant Evaluation Platform</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0f; color: #e0e0e0; min-height: 100vh; }
-        .container { max-width: 900px; margin: 0 auto; padding: 2rem 1rem; }
-        h1 { font-size: 2.2rem; color: #00d4aa; margin-bottom: 0.5rem; }
-        .subtitle { color: #7c3aed; font-size: 1rem; margin-bottom: 2rem; }
-        
-        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid #2a2a3a; }
-        .tab { padding: 0.75rem 1.5rem; cursor: pointer; color: #888; border-bottom: 2px solid transparent; }
-        .tab.active { color: #00d4aa; border-bottom-color: #00d4aa; }
-        
-        .page { display: none; }
-        .page.active { display: block; }
-        
-        .grant-card { background: #0f1520; border: 1px solid #2a2a3a; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; cursor: pointer; transition: border-color 0.2s; }
-        .grant-card:hover { border-color: #00d4aa; }
-        .grant-card h3 { color: #00d4aa; margin-bottom: 0.5rem; }
-        .grant-card .deadline { color: #ffd93d; font-size: 0.85rem; margin-top: 0.5rem; }
-        
-        .form-group { margin-bottom: 1rem; }
-        label { display: block; font-size: 0.85rem; color: #888; margin-bottom: 0.3rem; }
-        input, textarea, select { width: 100%; padding: 0.75rem; background: #0a0a0f; border: 1px solid #2a2a3a; border-radius: 6px; color: #e0e0e0; font-size: 0.9rem; }
-        input:focus, textarea:focus { outline: none; border-color: #00d4aa; }
-        textarea { resize: vertical; min-height: 100px; }
-        
-        .btn { background: linear-gradient(135deg, #00d4aa, #7c3aed); color: white; border: none; padding: 0.75rem 2rem; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
-        .btn:hover { opacity: 0.9; }
-        .btn:disabled { background: #333; color: #666; cursor: not-allowed; }
-        .btn-sm { padding: 0.5rem 1rem; font-size: 0.85rem; }
-        .btn-fund { background: linear-gradient(135deg, #ffd93d, #ff9f43); }
-        .btn-release { background: linear-gradient(135deg, #00d4aa, #45b7d1); }
-        
-        .result-box { background: #0f1520; border: 1px solid #2a2a3a; border-radius: 8px; padding: 1.5rem; margin-top: 1rem; }
-        .result-box h2 { color: #00d4aa; margin-bottom: 1rem; }
-        
-        .criteria-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem; }
-        .criteria-item { background: #0a0a0f; padding: 0.75rem; border-radius: 6px; }
-        .criteria-item .label { color: #888; font-size: 0.75rem; }
-        .criteria-item .value { font-weight: 600; margin-top: 0.25rem; }
-        
-        .PASS { color: #00d4aa; }
-        .REVIEW { color: #ffd93d; }
-        .FAIL { color: #ff6b6b; }
-        .APPROVED { color: #00d4aa; }
-        .REJECTED { color: #ff6b6b; }
-        .SUBMITTED { color: #7c3aed; }
-        .PAID { color: #45b7d1; }
-        
-        .final-assessment { background: #0a0a0f; padding: 1rem; border-radius: 6px; margin-bottom: 1rem; }
-        .final-assessment .label { color: #888; font-size: 0.85rem; }
-        .final-assessment .value { font-size: 1.5rem; font-weight: 700; margin-top: 0.25rem; }
-        
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --accent: #15BCDF; --accent-hover: #3fd0ef;
+            --danger: #ff5c7a; --success: #52e0a1; --warning: #ffd93d;
+            --bg: #0a0a0f; --card: #0f1520; --border: #2a2a3a;
+            --text: #e0e0e0; --muted: #888;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        a { color: var(--accent); text-decoration: none; }
+        .navbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 1rem; padding: 1rem clamp(20px, 4vw, 48px); background: var(--bg); border-bottom: 1px solid var(--border); }
+        .nav-logo { font-size: 1.4rem; font-weight: 700; color: var(--text); }
+        .nav-links { display: flex; gap: 34px; align-items: center; margin-left: auto; }
+        .nav-links a { font-weight: 700; font-size: .9rem; letter-spacing: .06em; color: var(--text); text-transform: uppercase; cursor: pointer; }
+        .nav-links a:hover, .nav-links a.active { color: var(--accent); }
+        .container { max-width: 1000px; margin: 0 auto; padding: 2rem clamp(20px, 4vw, 48px); }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+        h1 { font-size: 2rem; color: var(--text); margin-bottom: .5rem; }
+        h2 { color: var(--accent); margin-bottom: 1rem; }
+        h3 { color: var(--accent); margin-bottom: .75rem; font-size: 1rem; }
+        .subtitle { color: var(--muted); margin-bottom: 2rem; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+        label { font-size: .75rem; color: var(--muted); display: block; margin-bottom: .25rem; text-transform: uppercase; letter-spacing: .05em; }
+        input, textarea { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: .6rem .75rem; border-radius: 8px; font-size: .9rem; font-family: inherit; }
+        input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+        textarea { resize: vertical; min-height: 80px; }
+        .row { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1rem; }
+        .btn { border: 1px solid var(--accent); color: var(--accent); background: transparent; padding: .6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: .8rem; font-family: inherit; transition: all 0.2s; }
+        .btn:hover { background: var(--accent); color: #fff; }
+        .btn-p { background: var(--accent); color: #fff; }
+        .btn-p:hover { background: var(--accent-hover); }
+        .btn-d { border-color: var(--danger); color: var(--danger); }
+        .btn-d:hover { background: var(--danger); color: #fff; }
+        .btn-s { border-color: var(--success); color: var(--success); }
+        .btn-s:hover { background: var(--success); color: #fff; }
+        .btn-w { border-color: var(--warning); color: var(--warning); }
+        .btn-w:hover { background: var(--warning); color: #000; }
+        .out { background: var(--bg); border-radius: 8px; padding: 1rem; margin-top: .75rem; font-family: 'SF Mono', Monaco, monospace; font-size: .8rem; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; display: none; border: 1px solid var(--border); }
+        .out.show { display: block; }
+        .out.err { color: var(--danger); border-color: rgba(255,92,122,.2); }
+        .out.ok { color: var(--success); border-color: rgba(82,224,161,.2); }
+        .note { border-radius: 8px; padding: .75rem; margin-bottom: 1rem; font-size: .85rem; display: none; }
+        .note.show { display: block; }
+        .note.err { background: rgba(255,92,122,.1); color: var(--danger); }
+        .note.ok { background: rgba(82,224,161,.1); color: var(--success); }
+        .note.warn { background: rgba(255,217,61,.1); color: var(--warning); }
+        .note.info { background: rgba(21,188,223,.1); color: var(--accent); }
+        .badge { padding: .3rem .8rem; border-radius: 20px; font-size: .75rem; font-weight: 700; }
+        .badge.SUBMITTED { background: rgba(124,58,237,.2); color: #a78bfa; }
+        .badge.APPROVED { background: var(--success); color: #000; }
+        .badge.REJECTED { background: var(--danger); color: #fff; }
+        .badge.PAID { background: var(--accent); color: #000; }
+        .PASS { color: var(--success); font-weight: 700; }
+        .FAIL { color: var(--danger); font-weight: 700; }
+        .REVIEW { color: var(--warning); font-weight: 700; }
+        .criteria-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .75rem; margin: 1rem 0; }
+        .criteria-item { background: var(--bg); padding: .75rem; border-radius: 8px; border: 1px solid var(--border); }
+        .criteria-item .label { color: var(--muted); font-size: .7rem; }
+        .criteria-item .value { font-weight: 700; margin-top: .25rem; }
+        .final-assessment { background: var(--bg); padding: 1rem; border-radius: 8px; margin-bottom: 1rem; text-align: center; }
+        .final-assessment .label { color: var(--muted); font-size: .85rem; }
+        .final-assessment .value { font-size: 1.5rem; font-weight: 700; margin-top: .25rem; }
         .reasons { margin-bottom: 1rem; }
-        .reasons h4 { color: #888; margin-bottom: 0.5rem; }
+        .reasons h4 { color: var(--muted); margin-bottom: .5rem; }
         .reasons ul { list-style: none; padding-left: 0; }
-        .reasons li { padding: 0.25rem 0; padding-left: 1rem; position: relative; }
-        .reasons li::before { content: "•"; position: absolute; left: 0; color: #7c3aed; }
-        
-        .status-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
-        
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        .full-width { grid-column: 1 / -1; }
-        
+        .reasons li { padding: .25rem 0; padding-left: 1rem; position: relative; }
+        .reasons li::before { content: "•"; position: absolute; left: 0; color: var(--accent); }
+        .grant-detail { margin-bottom: 1.5rem; }
+        .grant-detail .field { margin-bottom: .5rem; }
+        .grant-detail .field-label { color: var(--muted); font-size: .75rem; }
+        .grant-detail .field-value { font-size: .95rem; }
         .loading { display: none; text-align: center; padding: 2rem; }
         .loading.active { display: block; }
-        .spinner { width: 40px; height: 40px; border: 3px solid #2a2a3a; border-top-color: #00d4aa; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
+        .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        
-        .error { background: #ff6b6b33; border: 1px solid #ff6b6b; padding: 1rem; border-radius: 6px; color: #ff6b6b; margin-bottom: 1rem; display: none; }
-        .error.active { display: block; }
-        
-        .success { background: #00d4aa33; border: 1px solid #00d4aa; padding: 1rem; border-radius: 6px; color: #00d4aa; margin-bottom: 1rem; display: none; }
-        .success.active { display: block; }
-        
-        .grant-detail { margin-bottom: 2rem; }
-        .grant-detail h2 { color: #00d4aa; margin-bottom: 0.5rem; }
-        .grant-detail .field { margin-bottom: 0.5rem; }
-        .grant-detail .field-label { color: #888; font-size: 0.8rem; }
-        .grant-detail .field-value { font-size: 0.95rem; }
-        
-        .nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #2a2a3a; }
-        .nav-links { display: flex; gap: 1rem; }
-        .nav-links a { color: #888; text-decoration: none; font-size: 0.9rem; }
-        .nav-links a:hover, .nav-links a.active { color: #00d4aa; }
-        .logo { font-size: 1.2rem; font-weight: 700; color: #00d4aa; }
-        
-        .hidden { display: none; }
-        
-        .info-box { background: #7c3aed33; border: 1px solid #7c3aed; padding: 1rem; border-radius: 6px; color: #7c3aed; margin-bottom: 1rem; }
-        .info-box a { color: #00d4aa; }
+        .step-indicator { display: flex; gap: .5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .step { padding: .3rem .8rem; border-radius: 20px; font-size: .75rem; background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
+        .step.active { border-color: var(--accent); color: var(--accent); }
+        .step.done { border-color: var(--success); color: var(--success); }
+        .info-box { background: rgba(21,188,223,.1); border: 1px solid var(--accent); padding: 1rem; border-radius: 8px; color: var(--accent); margin-bottom: 1rem; }
+        .info-box a { color: var(--success); }
     </style>
 </head>
 <body>
-    <div class="container">
-        <nav class="nav">
-            <div class="logo">GrantGuard v2</div>
-            <div class="nav-links">
-                <a href="#" onclick="showPage('grants')" class="active" id="nav-grants">Grants</a>
-                <a href="#" onclick="showPage('create-grant')" id="nav-create">Create Grant</a>
-                <a href="#" onclick="showPage('check-status')" id="nav-status">Check Status</a>
-            </div>
-        </nav>
-        
-        <div id="grants-page" class="page active">
-            <h1>Available Grants</h1>
-            <p class="subtitle">Browse active grant opportunities</p>
-            <div class="info-box">
-                <strong>Contract:</strong> <a href="https://explorer-studio-next.genlayer.com/address/0x671990450Bab8f89144F50B6A619c6382E824172" target="_blank">0x6719...4172</a> on Studio Next (chain 61997)
-            </div>
-            <div id="grants-list"></div>
+<nav class="navbar">
+    <div class="nav-logo">GrantGuard v2</div>
+    <div class="nav-links">
+        <a onclick="showPage('grants')" id="nav-grants" class="active">Grants</a>
+        <a onclick="showPage('create-grant')" id="nav-create">Create Grant</a>
+        <a onclick="showPage('check-status')" id="nav-status">Check Status</a>
+    </div>
+</nav>
+
+<div class="container">
+    <!-- Grants List Page -->
+    <div id="grants-page" class="page active">
+        <h1>Available Grants</h1>
+        <p class="subtitle">Browse active grant opportunities</p>
+        <div class="info-box">
+            <strong>Contract:</strong> <a href="https://explorer-studio-next.genlayer.com/address/0x671990450Bab8f89144F50B6A619c6382E824172" target="_blank">0x6719...4172</a> · 
+            <strong>Network:</strong> Studio Next (chain 61997) · 
+            <strong>Backend:</strong> <a href="https://grantguard.onrender.com/api/health" target="_blank">grantguard.onrender.com</a>
         </div>
-        
-        <div id="grant-detail-page" class="page">
-            <div id="grant-detail"></div>
-            <div id="application-form"></div>
-        </div>
-        
-        <div id="create-grant-page" class="page">
-            <h1>Create Grant</h1>
-            <p class="subtitle">Publish a new grant opportunity</p>
-            <div id="create-grant-success" class="success"></div>
-            <form id="create-grant-form">
-                <div class="form-group">
-                    <label>Grant ID *</label>
-                    <input type="text" id="grant-id" placeholder="my-grant-1" required>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Grant Name *</label>
-                        <input type="text" id="grant-name" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Deadline</label>
-                        <input type="date" id="grant-deadline">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Description *</label>
-                    <textarea id="grant-description" required></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Eligibility Criteria *</label>
-                    <textarea id="grant-eligibility" required></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Evaluation Criteria *</label>
-                    <textarea id="grant-criteria" required></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Budget Rules</label>
-                    <textarea id="grant-budget"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Required Evidence</label>
-                    <textarea id="grant-evidence"></textarea>
-                </div>
-                <button type="submit" class="btn">Publish Grant</button>
-            </form>
-        </div>
-        
-        <div id="check-status-page" class="page">
-            <h1>Check Application Status</h1>
-            <p class="subtitle">Enter your Application ID (e.g., app_0)</p>
-            <div class="form-group">
-                <label>Application ID</label>
-                <input type="text" id="check-app-id" placeholder="app_0">
-            </div>
-            <button class="btn btn-sm" onclick="checkStatus()">Check</button>
-            <div id="status-result"></div>
-        </div>
-        
-        <div id="loading" class="loading">
-            <div class="spinner"></div>
-            <p id="loading-text">Loading...</p>
-        </div>
-        
-        <div id="error" class="error"></div>
+        <div id="grants-list"></div>
     </div>
 
-    <script>
-    const API = 'https://grantguard.onrender.com';
-    
-    let grants = [];
-    let currentGrantId = null;
-    
-    loadGrants();
-    
-    function showPage(page) {
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
-        
-        const pageEl = document.getElementById(page + '-page');
-        if (pageEl) pageEl.classList.add('active');
-        
-        const navEl = document.getElementById('nav-' + page);
-        if (navEl) navEl.classList.add('active');
-        
-        currentGrantId = null;
-    }
-    
-    function showError(msg) {
-        const el = document.getElementById('error');
-        el.textContent = msg;
-        el.classList.add('active');
-        setTimeout(() => el.classList.remove('active'), 5000);
-    }
-    
-    function showLoading(text) {
-        document.getElementById('loading').classList.add('active');
-        document.getElementById('loading-text').textContent = text || 'Loading...';
-    }
-    
-    function hideLoading() {
-        document.getElementById('loading').classList.remove('active');
-    }
-    
-    async function loadGrants() {
-        showLoading('Loading grants...');
-        
-        for (let i = 0; i < 15; i++) {
-            try {
-                const res = await fetch(API + '/api/grants');
-                if (!res.ok) throw new Error('Server error: ' + res.status);
-                grants = await res.json();
-                
-                const listEl = document.getElementById('grants-list');
-                if (grants.length === 0) {
-                    listEl.innerHTML = '<p style="color:#666;">No grants available yet. Create the first one!</p>';
-                } else {
-                    let html = '';
-                    grants.forEach(g => {
-                        html += `<div class="grant-card" onclick="viewGrant('${g.id}')">
-                            <h3>${g.name}</h3>
-                            <p>${g.description ? g.description.slice(0, 100) + '...' : ''}</p>
-                            <div class="deadline">Deadline: ${g.deadline || 'No deadline'}</div>
-                        </div>`;
-                    });
-                    listEl.innerHTML = html;
-                }
-                hideLoading();
-                return;
-            } catch(e) {
-                await new Promise(r => setTimeout(r, 2000));
-            }
-        }
-        showError('Failed to load grants. Please refresh.');
-        hideLoading();
-    }
-    
-    function viewGrant(id) {
-        currentGrantId = id;
-        const grant = grants.find(g => g.id === id);
-        if (!grant) return;
-        
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.getElementById('grant-detail-page').classList.add('active');
-        document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
-        
-        const detailEl = document.getElementById('grant-detail');
-        detailEl.innerHTML = `
-            <div class="grant-detail">
-                <h2>${grant.name}</h2>
-                <div class="field"><div class="field-label">Description</div><div class="field-value">${grant.description || '-'}</div></div>
-                <div class="field"><div class="field-label">Eligibility</div><div class="field-value">${grant.eligibility || '-'}</div></div>
-                <div class="field"><div class="field-label">Evaluation Criteria</div><div class="field-value">${grant.criteria || '-'}</div></div>
-                <div class="field"><div class="field-label">Budget Rules</div><div class="field-value">${grant.budget_rules || '-'}</div></div>
-                <div class="field"><div class="field-label">Required Evidence</div><div class="field-value">${grant.required_evidence || '-'}</div></div>
-                <div class="field"><div class="field-label">Deadline</div><div class="field-value">${grant.deadline || 'No deadline'}</div></div>
-                <div class="field"><div class="field-label">Funded Amount</div><div class="field-value">${(Number(grant.funded_amount) / 1e18).toFixed(2)} GEN</div></div>
-                <div class="field"><div class="field-label">Paid Out</div><div class="field-value">${(Number(grant.paid_out) / 1e18).toFixed(2)} GEN</div></div>
+    <!-- Grant Detail + Application Page -->
+    <div id="grant-detail-page" class="page">
+        <div id="grant-detail"></div>
+        <div id="application-form"></div>
+    </div>
+
+    <!-- Create Grant Page -->
+    <div id="create-grant-page" class="page">
+        <h1>Create Grant</h1>
+        <p class="subtitle">Publish a new grant opportunity</p>
+        <div id="create-grant-success" class="note"></div>
+        <form id="create-grant-form">
+            <div class="grid">
+                <div><label>Grant ID *</label><input type="text" id="grant-id" placeholder="my-grant-1" required></div>
+                <div><label>Deadline</label><input type="date" id="grant-deadline"></div>
             </div>
-        `;
-        
-        const formEl = document.getElementById('application-form');
-        formEl.innerHTML = `
-            <h3 style="color:#7c3aed;margin:1.5rem 0 1rem;">Apply for this Grant</h3>
-            <div id="apply-success" class="success"></div>
-            <div id="apply-error" class="error"></div>
-            <form id="apply-form">
-                <div class="form-row">
-                    <div class="form-group"><label>Project Name *</label><input type="text" id="app-project-name" required></div>
-                    <div class="form-group"><label>Requested Amount (wei)</label><input type="text" id="app-amount" placeholder="500000000000000000"></div>
+            <div><label>Grant Name *</label><input type="text" id="grant-name" required></div>
+            <div><label>Description *</label><textarea id="grant-description" required></textarea></div>
+            <div><label>Eligibility Criteria *</label><textarea id="grant-eligibility" required></textarea></div>
+            <div><label>Evaluation Criteria *</label><textarea id="grant-criteria" required></textarea></div>
+            <div><label>Budget Rules</label><textarea id="grant-budget"></textarea></div>
+            <div><label>Required Evidence</label><textarea id="grant-evidence"></textarea></div>
+            <button type="submit" class="btn btn-p">Publish Grant</button>
+        </form>
+    </div>
+
+    <!-- Check Status Page -->
+    <div id="check-status-page" class="page">
+        <h1>Check Application Status</h1>
+        <p class="subtitle">Enter your Application ID (e.g., app_0)</p>
+        <div class="grid">
+            <div><label>Application ID</label><input type="text" id="check-app-id" placeholder="app_0"></div>
+        </div>
+        <button class="btn btn-p" onclick="checkStatus()">Check Status</button>
+        <div id="status-result"></div>
+    </div>
+
+    <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <p id="loading-text">Loading...</p>
+    </div>
+    <div id="error" class="note err"></div>
+</div>
+
+<script>
+const API = 'https://grantguard.onrender.com';
+let grants = [];
+let currentGrantId = null;
+
+function showNote(msg, type) {
+    const el = document.getElementById('error');
+    el.textContent = msg;
+    el.className = 'note show ' + type;
+    setTimeout(() => el.className = 'note', 5000);
+}
+
+function showLoading(text) {
+    document.getElementById('loading').classList.add('active');
+    document.getElementById('loading-text').textContent = text || 'Loading...';
+}
+
+function hideLoading() {
+    document.getElementById('loading').classList.remove('active');
+}
+
+function showPage(page) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+    document.getElementById(page + '-page').classList.add('active');
+    document.getElementById('nav-' + page).classList.add('active');
+    currentGrantId = null;
+}
+
+async function api(endpoint, options) {
+    const res = await fetch(API + endpoint, options);
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || 'Server error');
+    }
+    return res.json();
+}
+
+async function loadGrants() {
+    showLoading('Loading grants...');
+    try {
+        grants = await api('/api/grants');
+        const listEl = document.getElementById('grants-list');
+        if (grants.length === 0) {
+            listEl.innerHTML = '<p style="color:var(--muted)">No grants available yet. Create the first one!</p>';
+        } else {
+            listEl.innerHTML = grants.map(g => `
+                <div class="grant-card" onclick="viewGrant('${g.id}')">
+                    <h3>${g.name}</h3>
+                    <p>${g.description ? g.description.slice(0, 100) + '...' : ''}</p>
+                    <div style="color:var(--warning);font-size:.85rem;margin-top:.5rem">Deadline: ${g.deadline || 'No deadline'}</div>
+                    <div style="color:var(--muted);font-size:.8rem;margin-top:.25rem">Funded: ${(Number(g.funded_amount) / 1e18).toFixed(2)} GEN · Paid: ${(Number(g.paid_out) / 1e18).toFixed(2)} GEN</div>
                 </div>
-                <div class="form-group"><label>Project Description *</label><textarea id="app-description" required></textarea></div>
-                <div class="form-group"><label>Team Information</label><textarea id="app-team" placeholder="Team size, relevant experience"></textarea></div>
-                <div class="form-row">
-                    <div class="form-group"><label>Website</label><input type="url" id="app-website" placeholder="https://"></div>
-                    <div class="form-group"><label>GitHub URL</label><input type="url" id="app-github" placeholder="https://github.com/"></div>
-                </div>
-                <div class="form-group"><label>Evidence URLs (comma-separated) *</label><input type="text" id="app-evidence" placeholder="https://evidence1.com, https://evidence2.com" required></div>
-                <div class="form-group"><label>Additional Information</label><textarea id="app-additional" placeholder="Anything else you want to share"></textarea></div>
-                <button type="submit" class="btn">Submit Application</button>
-            </form>
-        `;
-        
-        document.getElementById('apply-form').onsubmit = submitApplication;
+            `).join('');
+        }
+    } catch (e) {
+        showNote('Error: ' + e.message, 'err');
     }
-    
-    async function submitApplication(e) {
-        e.preventDefault();
-        
-        const data = {
-            grant_id: currentGrantId,
-            project_name: document.getElementById('app-project-name').value,
-            project_description: document.getElementById('app-description').value,
-            team_info: document.getElementById('app-team').value,
-            requested_amount: document.getElementById('app-amount').value,
-            website: document.getElementById('app-website').value,
-            github_url: document.getElementById('app-github').value,
-            evidence_urls: document.getElementById('app-evidence').value,
-            additional_info: document.getElementById('app-additional').value
-        };
-        
-        showLoading('Submitting application...');
-        document.getElementById('apply-success').classList.remove('active');
-        document.getElementById('apply-error').classList.remove('active');
-        
-        try {
-            const res = await fetch(API + '/api/applications', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            const result = await res.json();
-            
-            if (result.status === 'success') {
-                const successEl = document.getElementById('apply-success');
-                successEl.innerHTML = `<div style="font-size:1.3rem;font-weight:700;margin-bottom:0.75rem;">✅ Application submitted successfully.</div><div style="margin-bottom:0.5rem;">Your Application ID:</div><div style="font-size:1.5rem;font-weight:700;color:#00d4aa;margin-bottom:0.5rem;font-family:monospace;word-break:break-all;">${result.app_id}</div><div style="color:#ffd93d;margin-bottom:1rem;">⚠️ Save this ID. You will use it to check your application status and evaluation.</div><button class="btn btn-sm" onclick="document.getElementById('check-app-id').value='${result.app_id}';showPage('check-status');">Check Status Now</button>`;
-                successEl.classList.add('active');
-                document.getElementById('apply-form').reset();
-            } else {
-                throw new Error(result.detail || 'Unknown error');
-            }
-        } catch(e) {
-            const errorEl = document.getElementById('apply-error');
-            errorEl.textContent = 'Error: ' + e.message;
-            errorEl.classList.add('active');
-        }
-        hideLoading();
+    hideLoading();
+}
+
+function viewGrant(id) {
+    currentGrantId = id;
+    const grant = grants.find(g => g.id === id);
+    if (!grant) return;
+
+    showPage('grant-detail');
+    document.getElementById('grant-detail').innerHTML = `
+        <div class="grant-detail">
+            <h2>${grant.name}</h2>
+            <div class="field"><div class="field-label">Description</div><div class="field-value">${grant.description || '-'}</div></div>
+            <div class="field"><div class="field-label">Eligibility</div><div class="field-value">${grant.eligibility || '-'}</div></div>
+            <div class="field"><div class="field-label">Evaluation Criteria</div><div class="field-value">${grant.criteria || '-'}</div></div>
+            <div class="field"><div class="field-label">Budget Rules</div><div class="field-value">${grant.budget_rules || '-'}</div></div>
+            <div class="field"><div class="field-label">Required Evidence</div><div class="field-value">${grant.required_evidence || '-'}</div></div>
+            <div class="field"><div class="field-label">Deadline</div><div class="field-value">${grant.deadline || 'No deadline'}</div></div>
+            <div class="field"><div class="field-label">Funded Amount</div><div class="field-value">${(Number(grant.funded_amount) / 1e18).toFixed(4)} GEN</div></div>
+            <div class="field"><div class="field-label">Paid Out</div><div class="field-value">${(Number(grant.paid_out) / 1e18).toFixed(4)} GEN</div></div>
+        </div>
+        <div class="row">
+            <button class="btn btn-w" onclick="fundGrant('${grant.id}')">Fund Grant</button>
+            <button class="btn btn-d" onclick="cancelGrant('${grant.id}')">Cancel Grant</button>
+        </div>
+        <div id="fund-result" class="out"></div>
+    `;
+
+    document.getElementById('application-form').innerHTML = `
+        <h3>Apply for this Grant</h3>
+        <div id="apply-success" class="note"></div>
+        <div id="apply-error" class="note err"></div>
+        <form id="apply-form">
+            <div class="grid">
+                <div><label>Project Name *</label><input type="text" id="app-project-name" required></div>
+                <div><label>Requested Amount (wei)</label><input type="text" id="app-amount" placeholder="500000000000000000"></div>
+            </div>
+            <div><label>Project Description *</label><textarea id="app-description" required></textarea></div>
+            <div><label>Team Information</label><textarea id="app-team" placeholder="Team size, relevant experience"></textarea></div>
+            <div class="grid">
+                <div><label>Website</label><input type="url" id="app-website" placeholder="https://"></div>
+                <div><label>GitHub URL</label><input type="url" id="app-github" placeholder="https://github.com/"></div>
+            </div>
+            <div><label>Evidence URLs (comma-separated) *</label><input type="text" id="app-evidence" placeholder="https://evidence1.com, https://evidence2.com" required></div>
+            <div><label>Additional Information</label><textarea id="app-additional" placeholder="Anything else you want to share"></textarea></div>
+            <button type="submit" class="btn btn-p">Submit Application</button>
+        </form>
+    `;
+
+    document.getElementById('apply-form').onsubmit = submitApplication;
+}
+
+async function submitApplication(e) {
+    e.preventDefault();
+    showLoading('Submitting application...');
+    document.getElementById('apply-success').classList.remove('show');
+    document.getElementById('apply-error').classList.remove('show');
+
+    try {
+        const result = await api('/api/applications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                grant_id: currentGrantId,
+                project_name: document.getElementById('app-project-name').value,
+                project_description: document.getElementById('app-description').value,
+                team_info: document.getElementById('app-team').value,
+                requested_amount: document.getElementById('app-amount').value,
+                website: document.getElementById('app-website').value,
+                github_url: document.getElementById('app-github').value,
+                evidence_urls: document.getElementById('app-evidence').value,
+                additional_info: document.getElementById('app-additional').value
+            })
+        });
+
+        const successEl = document.getElementById('apply-success');
+        successEl.innerHTML = `<strong>✅ Application submitted!</strong><br>App ID: <code>${result.app_id}</code><br>TX: <code>${result.tx_hash}</code><br><button class="btn btn-p btn-sm" onclick="document.getElementById('check-app-id').value='${result.app_id}';showPage('check-status');">Check Status</button>`;
+        successEl.className = 'note show ok';
+        document.getElementById('apply-form').reset();
+    } catch (e) {
+        const errorEl = document.getElementById('apply-error');
+        errorEl.textContent = 'Error: ' + e.message;
+        errorEl.className = 'note show err';
     }
-    
-    document.getElementById('create-grant-form').onsubmit = async function(e) {
-        e.preventDefault();
-        
-        const data = {
-            grant_id: document.getElementById('grant-id').value,
-            name: document.getElementById('grant-name').value,
-            description: document.getElementById('grant-description').value,
-            eligibility: document.getElementById('grant-eligibility').value,
-            criteria: document.getElementById('grant-criteria').value,
-            budget_rules: document.getElementById('grant-budget').value,
-            required_evidence: document.getElementById('grant-evidence').value,
-            deadline: document.getElementById('grant-deadline').value
-        };
-        
-        showLoading('Publishing grant...');
-        
-        try {
-            const res = await fetch(API + '/api/grants', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            const result = await res.json();
-            
-            if (result.status === 'success') {
-                const successEl = document.getElementById('create-grant-success');
-                successEl.textContent = 'Grant published! ID: ' + result.grant_id + ', TX: ' + result.tx_hash;
-                successEl.classList.add('active');
-                document.getElementById('create-grant-form').reset();
-                setTimeout(() => {
-                    showPage('grants');
-                    loadGrants();
-                }, 2000);
-            } else {
-                throw new Error(result.detail || 'Unknown error');
-            }
-        } catch(e) {
-            showError('Error: ' + e.message);
-        }
-        hideLoading();
-    };
-    
-    async function checkStatus() {
-        const appId = document.getElementById('check-app-id').value.trim();
-        if (!appId) {
-            showError('Enter application ID');
-            return;
-        }
-        
-        showLoading('Checking status...');
-        
-        for (let i = 0; i < 5; i++) {
+    hideLoading();
+}
+
+async function fundGrant(grantId) {
+    const amount = prompt('Enter amount to fund (in wei):', '1000000000000000000');
+    if (!amount) return;
+    showLoading('Funding grant...');
+    try {
+        const result = await api(`/api/grants/${grantId}/fund`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: amount })
+        });
+        document.getElementById('fund-result').className = 'out show ok';
+        document.getElementById('fund-result').textContent = `✅ Funded!\nTX: ${result.tx_hash}`;
+        loadGrants();
+    } catch (e) {
+        document.getElementById('fund-result').className = 'out show err';
+        document.getElementById('fund-result').textContent = `Error: ${e.message}`;
+    }
+    hideLoading();
+}
+
+async function cancelGrant(grantId) {
+    if (!confirm('Cancel this grant? Remaining funds will be refunded to creator.')) return;
+    showLoading('Cancelling grant...');
+    try {
+        const result = await api(`/api/grants/${grantId}/cancel`, { method: 'POST' });
+        showNote('Grant cancelled! TX: ' + result.tx_hash, 'ok');
+        loadGrants();
+        showPage('grants');
+    } catch (e) {
+        showNote('Error: ' + e.message, 'err');
+    }
+    hideLoading();
+}
+
+document.getElementById('create-grant-form').onsubmit = async function(e) {
+    e.preventDefault();
+    showLoading('Publishing grant...');
+    try {
+        const result = await api('/api/grants', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                grant_id: document.getElementById('grant-id').value,
+                name: document.getElementById('grant-name').value,
+                description: document.getElementById('grant-description').value,
+                eligibility: document.getElementById('grant-eligibility').value,
+                criteria: document.getElementById('grant-criteria').value,
+                budget_rules: document.getElementById('grant-budget').value,
+                required_evidence: document.getElementById('grant-evidence').value,
+                deadline: document.getElementById('grant-deadline').value
+            })
+        });
+        const successEl = document.getElementById('create-grant-success');
+        successEl.innerHTML = `<strong>✅ Grant published!</strong><br>ID: <code>${result.grant_id}</code><br>TX: <code>${result.tx_hash}</code>`;
+        successEl.className = 'note show ok';
+        document.getElementById('create-grant-form').reset();
+        setTimeout(() => { showPage('grants'); loadGrants(); }, 2000);
+    } catch (e) {
+        showNote('Error: ' + e.message, 'err');
+    }
+    hideLoading();
+};
+
+async function checkStatus() {
+    const appId = document.getElementById('check-app-id').value.trim();
+    if (!appId) { showNote('Enter application ID', 'warn'); return; }
+    showLoading('Checking status...');
+    try {
+        const app = await api('/api/applications/' + encodeURIComponent(appId));
+        const resultEl = document.getElementById('status-result');
+        let html = `<div class="card"><h2>Application ${app.id}</h2><p><strong>Project:</strong> ${app.project_name}</p><p><strong>Status:</strong> <span class="badge ${app.status}">${app.status}</span></p>`;
+
+        if (app.evaluation) {
             try {
-                const res = await fetch(API + '/api/applications/' + encodeURIComponent(appId));
-                if (!res.ok) throw new Error('Not found');
-                const app = await res.json();
-                
-                const resultEl = document.getElementById('status-result');
-                let html = `<div class="result-box"><h2>Application ${app.id}</h2><p><strong>Project:</strong> ${app.project_name}</p><p><strong>Status:</strong> <span class="status-badge status-${app.status}">${app.status}</span></p>`;
-                
-                if (app.status === 'APPROVED' || app.status === 'REJECTED' || app.status === 'PAID') {
-                    try {
-                        const ev = typeof app.evaluation === 'string' ? JSON.parse(app.evaluation) : app.evaluation;
-                        html += `<div class="final-assessment"><div class="label">Final Assessment</div><div class="value ${ev.final}">${ev.final}</div></div><div class="criteria-grid"><div class="criteria-item"><div class="label">Eligibility</div><div class="value ${ev.eligibility}">${ev.eligibility}</div></div><div class="criteria-item"><div class="label">Criteria</div><div class="value ${ev.criteria}">${ev.criteria}</div></div><div class="criteria-item"><div class="label">Budget</div><div class="value ${ev.budget}">${ev.budget}</div></div><div class="criteria-item"><div class="label">Evidence</div><div class="value ${ev.evidence}">${ev.evidence}</div></div></div>`;
-                        if (ev.reasons && ev.reasons.length > 0) {
-                            html += `<div class="reasons"><h4>Reasons</h4><ul>${ev.reasons.map(r => `<li>${r}</li>`).join('')}</ul></div>`;
-                        }
-                    } catch(e) {}
+                const ev = typeof app.evaluation === 'string' ? JSON.parse(app.evaluation) : app.evaluation;
+                html += `<div class="final-assessment"><div class="label">Final Assessment</div><div class="value ${ev.final}">${ev.final}</div></div>`;
+                html += `<div class="criteria-grid">`;
+                for (const [key, val] of Object.entries(ev)) {
+                    if (key === 'reasons' || key === 'final') continue;
+                    html += `<div class="criteria-item"><div class="label">${key}</div><div class="value ${val}">${val}</div></div>`;
                 }
-                
-                if (app.status === 'SUBMITTED') {
-                    html += `<button class="btn btn-sm" onclick="evaluateApp('${appId}')" style="margin-top:1rem;">Evaluate Application</button>`;
+                html += `</div>`;
+                if (ev.reasons && ev.reasons.length > 0) {
+                    html += `<div class="reasons"><h4>Reasons</h4><ul>${ev.reasons.map(r => `<li>${r}</li>`).join('')}</ul></div>`;
                 }
-                
-                if (app.status === 'APPROVED') {
-                    html += `<button class="btn btn-sm btn-release" onclick="releaseFunds('${appId}')" style="margin-top:1rem;">Release Funds</button>`;
-                }
-                
-                html += '</div>';
-                resultEl.innerHTML = html;
-                hideLoading();
-                return;
-            } catch(e) {
-                await new Promise(r => setTimeout(r, 2000));
-            }
+            } catch (e) {}
         }
-        showError('Failed to load application. Please refresh.');
-        hideLoading();
-    }
-    
-    async function evaluateApp(appId) {
-        showLoading('Evaluating application... (1-3 min)');
-        
-        for (let i = 0; i < 5; i++) {
-            try {
-                const res = await fetch(API + '/api/applications/' + encodeURIComponent(appId) + '/evaluate', {
-                    method: 'POST'
-                });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    checkStatus();
-                    hideLoading();
-                    return;
-                } else {
-                    throw new Error(data.detail || 'Evaluation failed');
-                }
-            } catch(e) {
-                if (i < 4) {
-                    await new Promise(r => setTimeout(r, 2000));
-                }
-            }
+
+        if (app.status === 'SUBMITTED') {
+            html += `<button class="btn btn-p" onclick="evaluateApp('${appId}')">Evaluate Application</button>`;
         }
-        showError('Failed to evaluate. Please try again.');
-        hideLoading();
-    }
-    
-    async function releaseFunds(appId) {
-        showLoading('Releasing funds...');
-        
-        try {
-            const res = await fetch(API + '/api/applications/' + encodeURIComponent(appId) + '/release', {
-                method: 'POST'
-            });
-            const data = await res.json();
-            if (data.status === 'success') {
-                checkStatus();
-            } else {
-                throw new Error(data.detail || 'Release failed');
-            }
-        } catch(e) {
-            showError('Error: ' + e.message);
+        if (app.status === 'APPROVED') {
+            html += `<button class="btn btn-s" onclick="releaseFunds('${appId}')">Release Funds</button>`;
         }
-        hideLoading();
+        html += '</div>';
+        resultEl.innerHTML = html;
+    } catch (e) {
+        showNote('Error: ' + e.message, 'err');
     }
-    </script>
+    hideLoading();
+}
+
+async function evaluateApp(appId) {
+    showLoading('Evaluating application... (1-3 min)');
+    try {
+        const result = await api('/api/applications/' + encodeURIComponent(appId) + '/evaluate', { method: 'POST' });
+        showNote('Evaluation complete!', 'ok');
+        checkStatus();
+    } catch (e) {
+        showNote('Error: ' + e.message, 'err');
+    }
+    hideLoading();
+}
+
+async function releaseFunds(appId) {
+    showLoading('Releasing funds...');
+    try {
+        const result = await api('/api/applications/' + encodeURIComponent(appId) + '/release', { method: 'POST' });
+        showNote('Funds released! Result: ' + result.result, 'ok');
+        checkStatus();
+    } catch (e) {
+        showNote('Error: ' + e.message, 'err');
+    }
+    hideLoading();
+}
+
+// Load grants on page load
+loadGrants();
+</script>
 </body>
 </html>
