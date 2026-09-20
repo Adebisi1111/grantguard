@@ -17,22 +17,6 @@ Grant evaluation platform with **source-grounded evaluation**, **on-chain eviden
 | No escrow/payout | `fund_grant()` (payable) → `release_funds()` → `gl.pay()` transfers actual GEN |
 | Unsafe fallback | Consensus failure → FAIL (not auto-PASS) |
 
-## Contract Source
-
-```python
-# v0.3.0
-# { "Depends": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng" }
-
-# Key methods:
-# - create_grant(grant_id, name, description, eligibility, criteria, budget_rules, required_evidence, deadline) → str
-# - fund_grant(grant_id) payable → str
-# - submit_application(grant_id, project_name, project_description, team_info, requested_amount, website, github_url, evidence_urls, additional_info) → str
-# - evaluate_application(app_id) → str (validators fetch evidence + consensus)
-# - release_funds(app_id) → str (transfers GEN via gl.pay)
-# - get_grant(grant_id) → Grant
-# - get_application(app_id) → Application
-```
-
 ## Testing Steps
 
 ### Prerequisites
@@ -41,33 +25,14 @@ Grant evaluation platform with **source-grounded evaluation**, **on-chain eviden
 3. Open https://adebisi1111.github.io/grantguard/
 4. Click **Connect Wallet** in top-right
 
-### Step 1: Create Grant
-Go to **Create Grant** tab:
+### Step 1: Lookup Existing Grant
+Go to **Grants** tab:
+- Enter Grant ID: `test-grant-1`
+- Click **View Grant**
+- Grant details should appear
 
-| Field | Value |
-|-------|-------|
-| Grant ID | `defi-grant-1` |
-| Grant Name | `DeFi Innovation Grant` |
-| Description | `Supporting DeFi projects` |
-| Eligibility Criteria | `Open to all developers` |
-| Evaluation Criteria | `Technical merit and innovation` |
-| Budget Rules | `Max 10000 GEN per project` |
-| Required Evidence | `GitHub repo with working demo` |
-| Deadline | `2026-12-31` |
-
-Click **Publish Grant** → sign in MetaMask
-
-### Step 2: View Grants
-Go to **Grants** tab → click your grant to view details
-
-### Step 3: Fund Grant
-On grant detail page:
-- Click **Fund Grant**
-- Enter amount: `1000000000000000000` (1 GEN)
-- Sign in MetaMask
-
-### Step 4: Submit Application
-On grant detail page, scroll to **Apply for this Grant**:
+### Step 2: Apply for the Grant
+On the grant detail page, fill in the application form:
 
 | Field | Value |
 |-------|-------|
@@ -82,16 +47,14 @@ On grant detail page, scroll to **Apply for this Grant**:
 
 Click **Submit Application** → sign in MetaMask
 
-Note the App ID shown (e.g., `app_0`)
-
-### Step 5: Check Status
+### Step 3: Check Status
 Go to **Check Status** tab:
 - Enter App ID: `app_0`
 - Click **Check Status**
 
 Should show: `Status: SUBMITTED`
 
-### Step 6: Evaluate Application
+### Step 4: Evaluate Application
 Click **Evaluate Application** button → sign in MetaMask
 
 **Wait 1-3 minutes.** Validators:
@@ -99,30 +62,10 @@ Click **Evaluate Application** button → sign in MetaMask
 2. Compare against stored criteria ("Technical merit and innovation")
 3. Reach consensus via `prompt_comparative`
 
-### Step 7: Check Evaluation Result
+### Step 5: Check Evaluation Result
 After evaluation, check status again:
 - Status: **REJECTED** (evidence doesn't match project description)
 - Evaluation: `{eligibility: "PASS", criteria: "FAIL", budget: "PASS", evidence: "FAIL", final: "FAIL", reasons: [...]}`
-
-### Step 8: Test Approved Application
-Create a new grant and submit with a matching repo:
-
-| Field | Value |
-|-------|-------|
-| Grant ID | `ai-grant-1` |
-| Grant Name | `AI Project Grant` |
-| Grant ID (app) | `ai-grant-1` |
-| Project Name | `Ethereum Analytics` |
-| GitHub URL | `https://github.com/ethereum/ethereum-org-website` |
-| Evidence URLs | `https://github.com/ethereum/ethereum-org-website` |
-| Project Description | `Analytics dashboard for ethereum.org` |
-
-Evaluate → should show **APPROVED** (evidence matches project description)
-
-### Step 9: Release Funds (if APPROVED)
-Click **Release Funds** → sign in MetaMask
-
-GEN is transferred from escrow to applicant via `gl.pay()`.
 
 ### Expected Results
 
@@ -148,9 +91,7 @@ GEN is transferred from escrow to applicant via `gl.pay()`.
 ## Architecture
 
 ```
-Frontend (GitHub Pages)
-    ↕ MetaMask
-Backend (Render) → GenLayer Studio Next
+Frontend (GitHub Pages) → MetaMask → GenLayer Studio Next
     ↕
 Contract: 0x671990450Bab8f89144F50B6A619c6382E824172
 ```
@@ -167,16 +108,3 @@ grantguard/
 └── contracts/
     └── grantguard.py   # Smart contract source
 ```
-
-## Build & Deploy
-
-### Backend (Render)
-1. Create Web Service from https://github.com/Adebisi1111/grantguard
-2. Build: `npm install`
-3. Start: `node server.js`
-4. Env: `PRIVATE_KEY=0x023d...c0af`, `CONTRACT_ADDRESS=0x6719...4172`
-
-### Frontend (GitHub Pages)
-1. Push to https://github.com/Adebisi1111/grantguard
-2. GitHub Pages → Source: gh-pages branch
-3. Access at https://adebisi1111.github.io/grantguard/
