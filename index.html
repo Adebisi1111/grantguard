@@ -68,18 +68,8 @@
 <div class="container">
     <div id="page-grants" class="page active">
         <h1>Available Grants</h1>
-        <p class="subtitle">Enter a grant ID to view details and apply</p>
-        <div class="grid" style="margin-bottom:1rem">
-            <div><label>Grant ID</label><input type="text" id="lookup-grant-id" placeholder="test-grant-1"></div>
-        </div>
-        <button class="btn btn-p" onclick="lookupGrant()">View Grant</button>
-        <div id="grants-list" style="margin-top:1rem"></div>
-        <hr style="border-color:#2a2a3a;margin:1.5rem 0">
-        <h3>Or discover grants by ID pattern:</h3>
-        <div class="row">
-            <button class="btn btn-s" onclick="discoverGrants()">Discover grant_0 to grant_9</button>
-        </div>
-        <div id="discover-result" style="margin-top:1rem"></div>
+        <p class="subtitle">Click a grant to view details and apply</p>
+        <div id="grants-list"><p style="color:#888">Loading grants...</p></div>
     </div>
 
     <div id="page-detail" class="page">
@@ -249,7 +239,100 @@ function decodeUint(hex) {
 
 async function loadGrants() {
     var listEl = document.getElementById('grants-list');
-    listEl.innerHTML = '<p style="color:#888">Enter a grant ID above to view it, or click Discover to find grants.</p>';
+    listEl.innerHTML = '<p style="color:#888">Loading grants from chain...</p>';
+    
+    if (!window.ethereum) {
+        listEl.innerHTML = '<p style="color:#888">Please connect wallet to view grants</p>';
+        return;
+    }
+    
+    try {
+        var statsResult = await ethCall('get_stats', []);
+        var totalGrants = decodeUint(statsResult);
+        
+        if (totalGrants === 0) {
+            listEl.innerHTML = '<p style="color:#888">No grants found. Create the first one!</p>';
+            return;
+        }
+        
+        // Try multiple ID patterns to find all grants
+        var found = [];
+        var tried = new Set();
+        
+        // Pattern 1: grant_0, grant_1, grant_2...
+        for (var i = 0; i < totalGrants + 5; i++) {
+            var grantId = 'grant_' + i;
+            tried.add(grantId);
+            try {
+                var result = await ethCall('get_grant', [grantId]);
+                var name = decodeString(result);
+                if (name) {
+                    found.push({ id: grantId, name: name });
+                }
+            } catch(e) {}
+        }
+        
+        // Pattern 2: test-grant-1, test-grant-2...
+        for (var i = 1; i <= 10; i++) {
+            var grantId = 'test-grant-' + i;
+            if (tried.has(grantId)) continue;
+            tried.add(grantId);
+            try {
+                var result = await ethCall('get_grant', [grantId]);
+                var name = decodeString(result);
+                if (name) {
+                    found.push({ id: grantId, name: name });
+                }
+            } catch(e) {}
+        }
+        
+        // Pattern 3: grant-1, grant-2, grant-3...
+        for (var i = 1; i <= 10; i++) {
+            var grantId = 'grant-' + i;
+            if (tried.has(grantId)) continue;
+            tried.add(grantId);
+            try {
+                var result = await ethCall('get_grant', [grantId]);
+                var name = decodeString(result);
+                if (name) {
+                    found.push({ id: grantId, name: name });
+                }
+            } catch(e) {}
+        }
+        
+        // Pattern 4: defi-grant-1, ai-grant-1, etc.
+        var prefixes = ['defi', 'ai', 'web3', 'nft', 'dao'];
+        for (var p = 0; p < prefixes.length; p++) {
+            for (var i = 1; i <= 5; i++) {
+                var grantId = prefixes[p] + '-grant-' + i;
+                if (tried.has(grantId)) continue;
+                tried.add(grantId);
+                try {
+                    var result = await ethCall('get_grant', [grantId]);
+                    var name = decodeString(result);
+                    if (name) {
+                        found.push({ id: grantId, name: name });
+                    }
+                } catch(e) {}
+            }
+        }
+        
+        grants = found;
+        
+        if (grants.length === 0) {
+            listEl.innerHTML = '<p style="color:#888">No grants found. Create the first one!</p>';
+        } else {
+            listEl.innerHTML = grants.map(function(g) {
+                return '<div class="card grant-card" onclick="viewGrant(\'' + g.id + '\')">' +
+                    '<h3>' + g.name + '</h3>' +
+                    '<div class="meta">ID: ' + g.id + ' · Click to view details and apply</div>' +
+                '</div>';
+            }).join('');
+        }
+    } catch (e) {
+        listEl.innerHTML = '<p style="color:#888">Error loading grants. Make sure you are on Studio Next network.</p>';
+        note('Error: ' + e.message, 'err');
+    }
 }
 
 async function lookupGrant() {
