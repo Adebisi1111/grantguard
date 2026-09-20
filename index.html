@@ -19,6 +19,9 @@
         .nav-links { display: flex; gap: 34px; align-items: center; margin-left: auto; }
         .nav-links a { font-weight: 700; font-size: .9rem; letter-spacing: .06em; color: var(--text); text-transform: uppercase; cursor: pointer; }
         .nav-links a:hover, .nav-links a.active { color: var(--accent); }
+        .wallet-btn { border: 1px solid var(--accent); color: var(--accent); background: transparent; padding: .6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: .8rem; font-family: inherit; }
+        .wallet-btn:hover { background: var(--accent); color: #fff; }
+        .wallet-btn.connected { background: var(--success); border-color: var(--success); color: #000; }
         .container { max-width: 1000px; margin: 0 auto; padding: 2rem clamp(20px, 4vw, 48px); }
         .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
         h1 { font-size: 2rem; color: var(--text); margin-bottom: .5rem; }
@@ -34,6 +37,7 @@
         .row { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1rem; }
         .btn { border: 1px solid var(--accent); color: var(--accent); background: transparent; padding: .6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: .8rem; font-family: inherit; transition: all 0.2s; }
         .btn:hover { background: var(--accent); color: #fff; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-p { background: var(--accent); color: #fff; }
         .btn-p:hover { background: var(--accent-hover); }
         .btn-d { border-color: var(--danger); color: var(--danger); }
@@ -80,15 +84,27 @@
         .loading.active { display: block; }
         .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 1rem; }
         @keyframes spin { to { transform: rotate(360deg); } }
+        .info-box { background: rgba(21,188,223,.1); border: 1px solid var(--accent); padding: 1rem; border-radius: 8px; color: var(--accent); margin-bottom: 1rem; }
+        .info-box a { color: var(--success); }
+        .info-box code { background: rgba(0,0,0,.3); padding: .2rem .4rem; border-radius: 4px; font-family: monospace; }
         .step-indicator { display: flex; gap: .5rem; margin-bottom: 1rem; flex-wrap: wrap; }
         .step { padding: .3rem .8rem; border-radius: 20px; font-size: .75rem; background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
         .step.active { border-color: var(--accent); color: var(--accent); }
         .step.done { border-color: var(--success); color: var(--success); }
-        .info-box { background: rgba(21,188,223,.1); border: 1px solid var(--accent); padding: 1rem; border-radius: 8px; color: var(--accent); margin-bottom: 1rem; }
-        .info-box a { color: var(--success); }
+        .disabled-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.7); display: none; justify-content: center; align-items: center; z-index: 100; }
+        .disabled-overlay.show { display: flex; }
+        .disabled-message { background: var(--card); padding: 2rem; border-radius: 12px; text-align: center; border: 1px solid var(--accent); }
     </style>
 </head>
 <body>
+<div class="disabled-overlay" id="walletOverlay">
+    <div class="disabled-message">
+        <h2>Connect Wallet Required</h2>
+        <p style="margin: 1rem 0;">Please connect your MetaMask wallet to use GrantGuard</p>
+        <button class="btn btn-p" onclick="connectWallet()">Connect Wallet</button>
+    </div>
+</div>
+
 <nav class="navbar">
     <div class="nav-logo">GrantGuard v2</div>
     <div class="nav-links">
@@ -96,6 +112,7 @@
         <a onclick="showPage('create-grant')" id="nav-create">Create Grant</a>
         <a onclick="showPage('check-status')" id="nav-status">Check Status</a>
     </div>
+    <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">Connect Wallet</button>
 </nav>
 
 <div class="container">
@@ -105,8 +122,7 @@
         <p class="subtitle">Browse active grant opportunities</p>
         <div class="info-box">
             <strong>Contract:</strong> <a href="https://explorer-studio-next.genlayer.com/address/0x671990450Bab8f89144F50B6A619c6382E824172" target="_blank">0x6719...4172</a> · 
-            <strong>Network:</strong> Studio Next (chain 61997) · 
-            <strong>Backend:</strong> <a href="https://grantguard.onrender.com/api/health" target="_blank">grantguard.onrender.com</a>
+            <strong>Network:</strong> Studio Next (chain 61997)
         </div>
         <div id="grants-list"></div>
     </div>
@@ -133,8 +149,9 @@
             <div><label>Evaluation Criteria *</label><textarea id="grant-criteria" required></textarea></div>
             <div><label>Budget Rules</label><textarea id="grant-budget"></textarea></div>
             <div><label>Required Evidence</label><textarea id="grant-evidence"></textarea></div>
-            <button type="submit" class="btn btn-p">Publish Grant</button>
+            <button type="submit" class="btn btn-p" id="btn-create">Publish Grant</button>
         </form>
+        <div id="create-result" class="out"></div>
     </div>
 
     <!-- Check Status Page -->
@@ -156,14 +173,30 @@
 </div>
 
 <script>
-const API = 'https://grantguard.onrender.com';
+const CONTRACT = '0x671990450Bab8f89144F50B6A619c6382E824172';
+const CHAIN_ID = 61997;
+const CHAIN_HEX = '0x107d';
+const RPC = 'https://studio-next.genlayer.com/api';
+const ABI = [
+    {"inputs":[{"name":"grant_id","type":"string"}],"name":"cancel_grant","outputs":[{"type":"bool"}],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"name":"grant_id","type":"string"},{"name":"name","type":"string"},{"name":"description","type":"string"},{"name":"eligibility","type":"string"},{"name":"criteria","type":"string"},{"name":"budget_rules","type":"string"},{"name":"required_evidence","type":"string"},{"name":"deadline","type":"string"}],"name":"create_grant","outputs":[{"type":"string"}],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"name":"app_id","type":"string"}],"name":"evaluate_application","outputs":[{"type":"string"}],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"name":"grant_id","type":"string"}],"name":"fund_grant","outputs":[{"type":"string"}],"stateMutability":"payable","type":"function"},
+    {"inputs":[{"name":"grant_id","type":"string"}],"name":"get_application","outputs":[{"components":[{"name":"id","type":"string"},{"name":"grant_id","type":"string"},{"name":"project_name","type":"string"},{"name":"project_description","type":"string"},{"name":"team_info","type":"string"},{"name":"requested_amount","type":"uint256"},{"name":"website","type":"string"},{"name":"github_url","type":"string"},{"name":"evidence_urls","type":"string"},{"name":"additional_info","type":"string"},{"name":"status","type":"string"},{"name":"evaluation","type":"string"}],"type":"tuple"}],"stateMutability":"view","type":"function"},
+    {"inputs":[{"name":"grant_id","type":"string"}],"name":"get_grant","outputs":[{"components":[{"name":"id","type":"string"},{"name":"name","type":"string"},{"name":"description","type":"string"},{"name":"eligibility","type":"string"},{"name":"criteria","type":"string"},{"name":"budget_rules","type":"string"},{"name":"required_evidence","type":"string"},{"name":"deadline","type":"string"},{"name":"creator","type":"string"},{"name":"active","type":"bool"},{"name":"funded_amount","type":"uint256"},{"name":"paid_out","type":"uint256"}],"type":"tuple"}],"stateMutability":"view","type":"function"},
+    {"inputs":[],"name":"get_stats","outputs":[{"type":"tuple"}],"stateMutability":"view","type":"function"},
+    {"inputs":[{"name":"app_id","type":"string"}],"name":"release_funds","outputs":[{"type":"string"}],"stateMutability":"nonpayable","type":"function"},
+    {"inputs":[{"name":"grant_id","type":"string"},{"name":"project_name","type":"string"},{"name":"project_description","type":"string"},{"name":"team_info","type":"string"},{"name":"requested_amount","type":"uint256"},{"name":"website","type":"string"},{"name":"github_url","type":"string"},{"name":"evidence_urls","type":"string"},{"name":"additional_info","type":"string"}],"name":"submit_application","outputs":[{"type":"string"}],"stateMutability":"nonpayable","type":"function"}
+];
+
+let acct = null;
 let grants = [];
 let currentGrantId = null;
 
 function showNote(msg, type) {
     const el = document.getElementById('error');
     el.textContent = msg;
-    el.className = 'note show ' + type;
+    el.className = 'note show ' + (type || 'warn');
     setTimeout(() => el.className = 'note', 5000);
 }
 
@@ -184,59 +217,106 @@ function showPage(page) {
     currentGrantId = null;
 }
 
-async function api(endpoint, options) {
-    const res = await fetch(API + endpoint, options);
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || 'Server error');
+async function connectWallet() {
+    if (!window.ethereum) { showNote('MetaMask not detected!', 'err'); return; }
+    try {
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        if (!accounts || !accounts.length) throw new Error('No accounts');
+        acct = accounts[0];
+        const chain = await window.ethereum.request({ method: 'eth_chainId' });
+        if (parseInt(chain, 16) !== CHAIN_ID) {
+            showNote('Switching to Studio Next...', 'warn');
+            try { await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [{ chainId: CHAIN_HEX, chainName: 'GenLayer Studio Next', rpcUrls: [RPC], nativeCurrency: { name: 'GEN', symbol: 'GEN', decimals: 18 } }] }); } catch(e) {}
+            await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAIN_HEX }] });
+        }
+        document.getElementById('walletBtn').textContent = `✓ ${acct.slice(0,6)}...${acct.slice(-4)}`;
+        document.getElementById('walletBtn').classList.add('connected');
+        document.getElementById('walletOverlay').classList.remove('show');
+        setButtonsEnabled(true);
+        loadGrants();
+    } catch (e) {
+        showNote('Error: ' + e.message, 'err');
     }
-    return res.json();
+}
+
+function setButtonsEnabled(enabled) {
+    document.querySelectorAll('.btn').forEach(b => b.disabled = !enabled);
+    if (!enabled) document.getElementById('walletOverlay').classList.add('show');
+}
+
+async function call(method, args) {
+    const selector = getSelector(method);
+    const argTypes = getArgTypes(method);
+    const data = window.viem ? window.viem.encodeFunctionData({ abi: ABI, functionName: method, args }) : selector + encodeArgs(args);
+    const result = await window.ethereum.request({ method: 'eth_call', params: [{ to: CONTRACT, data }, 'latest'] });
+    return decodeResult(method, result);
+}
+
+async function sendTx(method, args, value) {
+    const data = window.viem ? window.viem.encodeFunctionData({ abi: ABI, functionName: method, args }) : getSelector(method) + encodeArgs(args);
+    return await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: acct, to: CONTRACT, data, value: value ? '0x' + value.toString(16) : '0x0' }] });
+}
+
+function getSelector(method) {
+    const fn = ABI.find(f => f.name === method);
+    if (!fn) return '0x';
+    const sig = method + '(' + fn.inputs.map(i => i.type).join(',') + ')';
+    return '0x' + Array.from(sig).reduce((acc, c) => acc + c.charCodeAt(0).toString(16), '').slice(0, 8);
+}
+
+function getArgTypes(method) {
+    const fn = ABI.find(f => f.name === method);
+    return fn ? fn.inputs.map(i => i.type) : [];
+}
+
+function encodeArgs(args) {
+    // Simplified encoding for basic types
+    let result = '';
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        if (typeof arg === 'string' && arg.startsWith('0x')) {
+            result += arg.slice(2).padStart(64, '0');
+        } else if (typeof arg === 'string') {
+            const hex = Array.from(arg).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+            result += '0000000000000000000000000000000000000000000000000000000000000020';
+            result += hex.length.toString(16).padStart(64, '0');
+            result += hex.padEnd(64, '0');
+        } else if (typeof arg === 'number' || typeof arg === 'bigint') {
+            result += BigInt(arg).toString(16).padStart(64, '0');
+        }
+    }
+    return result;
+}
+
+function decodeResult(method, result) {
+    // Simplified - return raw result for now
+    return result;
 }
 
 async function loadGrants() {
     showLoading('Loading grants...');
     try {
-        grants = await api('/api/grants');
+        const stats = await call('get_stats', []);
+        // For now, just show a message - reading all grants requires more complex decoding
         const listEl = document.getElementById('grants-list');
-        if (grants.length === 0) {
-            listEl.innerHTML = '<p style="color:var(--muted)">No grants available yet. Create the first one!</p>';
-        } else {
-            listEl.innerHTML = grants.map(g => `
-                <div class="grant-card" onclick="viewGrant('${g.id}')">
-                    <h3>${g.name}</h3>
-                    <p>${g.description ? g.description.slice(0, 100) + '...' : ''}</p>
-                    <div style="color:var(--warning);font-size:.85rem;margin-top:.5rem">Deadline: ${g.deadline || 'No deadline'}</div>
-                    <div style="color:var(--muted);font-size:.8rem;margin-top:.25rem">Funded: ${(Number(g.funded_amount) / 1e18).toFixed(2)} GEN · Paid: ${(Number(g.paid_out) / 1e18).toFixed(2)} GEN</div>
-                </div>
-            `).join('');
-        }
+        listEl.innerHTML = '<p style="color:var(--muted)">Grants are stored on-chain. Use "Create Grant" to add a grant, then note its ID to view later.</p>';
     } catch (e) {
-        showNote('Error: ' + e.message, 'err');
+        showNote('Error loading grants: ' + e.message, 'err');
     }
     hideLoading();
 }
 
 function viewGrant(id) {
     currentGrantId = id;
-    const grant = grants.find(g => g.id === id);
-    if (!grant) return;
-
     showPage('grant-detail');
+    
     document.getElementById('grant-detail').innerHTML = `
         <div class="grant-detail">
-            <h2>${grant.name}</h2>
-            <div class="field"><div class="field-label">Description</div><div class="field-value">${grant.description || '-'}</div></div>
-            <div class="field"><div class="field-label">Eligibility</div><div class="field-value">${grant.eligibility || '-'}</div></div>
-            <div class="field"><div class="field-label">Evaluation Criteria</div><div class="field-value">${grant.criteria || '-'}</div></div>
-            <div class="field"><div class="field-label">Budget Rules</div><div class="field-value">${grant.budget_rules || '-'}</div></div>
-            <div class="field"><div class="field-label">Required Evidence</div><div class="field-value">${grant.required_evidence || '-'}</div></div>
-            <div class="field"><div class="field-label">Deadline</div><div class="field-value">${grant.deadline || 'No deadline'}</div></div>
-            <div class="field"><div class="field-label">Funded Amount</div><div class="field-value">${(Number(grant.funded_amount) / 1e18).toFixed(4)} GEN</div></div>
-            <div class="field"><div class="field-label">Paid Out</div><div class="field-value">${(Number(grant.paid_out) / 1e18).toFixed(4)} GEN</div></div>
+            <h2>Grant: ${id}</h2>
+            <p style="color:var(--muted)">Grant data stored on-chain. Use Read methods on explorer to view full details.</p>
         </div>
         <div class="row">
-            <button class="btn btn-w" onclick="fundGrant('${grant.id}')">Fund Grant</button>
-            <button class="btn btn-d" onclick="cancelGrant('${grant.id}')">Cancel Grant</button>
+            <button class="btn btn-w" onclick="fundGrant('${id}')">Fund Grant</button>
         </div>
         <div id="fund-result" class="out"></div>
     `;
@@ -272,24 +352,21 @@ async function submitApplication(e) {
     document.getElementById('apply-error').classList.remove('show');
 
     try {
-        const result = await api('/api/applications', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                grant_id: currentGrantId,
-                project_name: document.getElementById('app-project-name').value,
-                project_description: document.getElementById('app-description').value,
-                team_info: document.getElementById('app-team').value,
-                requested_amount: document.getElementById('app-amount').value,
-                website: document.getElementById('app-website').value,
-                github_url: document.getElementById('app-github').value,
-                evidence_urls: document.getElementById('app-evidence').value,
-                additional_info: document.getElementById('app-additional').value
-            })
-        });
+        const requestedAmount = BigInt(document.getElementById('app-amount').value || '0');
+        const txHash = await sendTx('submit_application', [
+            currentGrantId,
+            document.getElementById('app-project-name').value,
+            document.getElementById('app-description').value,
+            document.getElementById('app-team').value,
+            requestedAmount,
+            document.getElementById('app-website').value,
+            document.getElementById('app-github').value,
+            document.getElementById('app-evidence').value,
+            document.getElementById('app-additional').value
+        ], 0n);
 
         const successEl = document.getElementById('apply-success');
-        successEl.innerHTML = `<strong>✅ Application submitted!</strong><br>App ID: <code>${result.app_id}</code><br>TX: <code>${result.tx_hash}</code><br><button class="btn btn-p btn-sm" onclick="document.getElementById('check-app-id').value='${result.app_id}';showPage('check-status');">Check Status</button>`;
+        successEl.innerHTML = `<strong>✅ Application submitted!</strong><br>TX: <code>${txHash}</code><br><br><strong>App ID:</strong> Check explorer for the next app ID (e.g., app_0, app_1, etc.)<br><button class="btn btn-p btn-sm" onclick="showPage('check-status')">Check Status</button>`;
         successEl.className = 'note show ok';
         document.getElementById('apply-form').reset();
     } catch (e) {
@@ -305,31 +382,12 @@ async function fundGrant(grantId) {
     if (!amount) return;
     showLoading('Funding grant...');
     try {
-        const result = await api(`/api/grants/${grantId}/fund`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ value: amount })
-        });
+        const txHash = await sendTx('fund_grant', [grantId], BigInt(amount));
         document.getElementById('fund-result').className = 'out show ok';
-        document.getElementById('fund-result').textContent = `✅ Funded!\nTX: ${result.tx_hash}`;
-        loadGrants();
+        document.getElementById('fund-result').textContent = `✅ Funded!\nTX: ${txHash}`;
     } catch (e) {
         document.getElementById('fund-result').className = 'out show err';
         document.getElementById('fund-result').textContent = `Error: ${e.message}`;
-    }
-    hideLoading();
-}
-
-async function cancelGrant(grantId) {
-    if (!confirm('Cancel this grant? Remaining funds will be refunded to creator.')) return;
-    showLoading('Cancelling grant...');
-    try {
-        const result = await api(`/api/grants/${grantId}/cancel`, { method: 'POST' });
-        showNote('Grant cancelled! TX: ' + result.tx_hash, 'ok');
-        loadGrants();
-        showPage('grants');
-    } catch (e) {
-        showNote('Error: ' + e.message, 'err');
     }
     hideLoading();
 }
@@ -338,27 +396,26 @@ document.getElementById('create-grant-form').onsubmit = async function(e) {
     e.preventDefault();
     showLoading('Publishing grant...');
     try {
-        const result = await api('/api/grants', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                grant_id: document.getElementById('grant-id').value,
-                name: document.getElementById('grant-name').value,
-                description: document.getElementById('grant-description').value,
-                eligibility: document.getElementById('grant-eligibility').value,
-                criteria: document.getElementById('grant-criteria').value,
-                budget_rules: document.getElementById('grant-budget').value,
-                required_evidence: document.getElementById('grant-evidence').value,
-                deadline: document.getElementById('grant-deadline').value
-            })
-        });
+        const txHash = await sendTx('create_grant', [
+            document.getElementById('grant-id').value,
+            document.getElementById('grant-name').value,
+            document.getElementById('grant-description').value,
+            document.getElementById('grant-eligibility').value,
+            document.getElementById('grant-criteria').value,
+            document.getElementById('grant-budget').value,
+            document.getElementById('grant-evidence').value,
+            document.getElementById('grant-deadline').value
+        ], 0n);
         const successEl = document.getElementById('create-grant-success');
-        successEl.innerHTML = `<strong>✅ Grant published!</strong><br>ID: <code>${result.grant_id}</code><br>TX: <code>${result.tx_hash}</code>`;
+        successEl.innerHTML = `<strong>✅ Grant published!</strong><br>ID: <code>${document.getElementById('grant-id').value}</code><br>TX: <code>${txHash}</code>`;
         successEl.className = 'note show ok';
         document.getElementById('create-grant-form').reset();
-        setTimeout(() => { showPage('grants'); loadGrants(); }, 2000);
+        document.getElementById('create-result').className = 'out show ok';
+        document.getElementById('create-result').textContent = `Grant created successfully!\nTX: ${txHash}\n\nNote: Grant ID is "${document.getElementById('grant-id').value}"`;
     } catch (e) {
         showNote('Error: ' + e.message, 'err');
+        document.getElementById('create-result').className = 'out show err';
+        document.getElementById('create-result').textContent = `Error: ${e.message}`;
     }
     hideLoading();
 };
@@ -368,34 +425,13 @@ async function checkStatus() {
     if (!appId) { showNote('Enter application ID', 'warn'); return; }
     showLoading('Checking status...');
     try {
-        const app = await api('/api/applications/' + encodeURIComponent(appId));
+        // Use eth_call to read application data
+        const result = await window.ethereum.request({ method: 'eth_call', params: [{ to: CONTRACT, data: getSelector('get_application') + encodeArgs([appId]) }, 'latest'] });
         const resultEl = document.getElementById('status-result');
-        let html = `<div class="card"><h2>Application ${app.id}</h2><p><strong>Project:</strong> ${app.project_name}</p><p><strong>Status:</strong> <span class="badge ${app.status}">${app.status}</span></p>`;
-
-        if (app.evaluation) {
-            try {
-                const ev = typeof app.evaluation === 'string' ? JSON.parse(app.evaluation) : app.evaluation;
-                html += `<div class="final-assessment"><div class="label">Final Assessment</div><div class="value ${ev.final}">${ev.final}</div></div>`;
-                html += `<div class="criteria-grid">`;
-                for (const [key, val] of Object.entries(ev)) {
-                    if (key === 'reasons' || key === 'final') continue;
-                    html += `<div class="criteria-item"><div class="label">${key}</div><div class="value ${val}">${val}</div></div>`;
-                }
-                html += `</div>`;
-                if (ev.reasons && ev.reasons.length > 0) {
-                    html += `<div class="reasons"><h4>Reasons</h4><ul>${ev.reasons.map(r => `<li>${r}</li>`).join('')}</ul></div>`;
-                }
-            } catch (e) {}
-        }
-
-        if (app.status === 'SUBMITTED') {
-            html += `<button class="btn btn-p" onclick="evaluateApp('${appId}')">Evaluate Application</button>`;
-        }
-        if (app.status === 'APPROVED') {
-            html += `<button class="btn btn-s" onclick="releaseFunds('${appId}')">Release Funds</button>`;
-        }
-        html += '</div>';
-        resultEl.innerHTML = html;
+        resultEl.innerHTML = `<div class="card"><h2>Application ${appId}</h2><p><strong>Raw result:</strong> <code>${result}</code></p><p style="color:var(--muted);margin-top:1rem">Check full details on <a href="https://explorer-studio-next.genlayer.com/address/${CONTRACT}" target="_blank">Explorer</a></p></div>`;
+        
+        // Add evaluate button
+        resultEl.innerHTML += `<button class="btn btn-p" onclick="evaluateApp('${appId}')" style="margin-top:1rem">Evaluate Application</button>`;
     } catch (e) {
         showNote('Error: ' + e.message, 'err');
     }
@@ -405,9 +441,8 @@ async function checkStatus() {
 async function evaluateApp(appId) {
     showLoading('Evaluating application... (1-3 min)');
     try {
-        const result = await api('/api/applications/' + encodeURIComponent(appId) + '/evaluate', { method: 'POST' });
-        showNote('Evaluation complete!', 'ok');
-        checkStatus();
+        const txHash = await sendTx('evaluate_application', [appId], 0n);
+        showNote('Evaluation started! TX: ' + txHash, 'ok');
     } catch (e) {
         showNote('Error: ' + e.message, 'err');
     }
@@ -417,17 +452,32 @@ async function evaluateApp(appId) {
 async function releaseFunds(appId) {
     showLoading('Releasing funds...');
     try {
-        const result = await api('/api/applications/' + encodeURIComponent(appId) + '/release', { method: 'POST' });
-        showNote('Funds released! Result: ' + result.result, 'ok');
-        checkStatus();
+        const txHash = await sendTx('release_funds', [appId], 0n);
+        showNote('Funds released! TX: ' + txHash, 'ok');
     } catch (e) {
         showNote('Error: ' + e.message, 'err');
     }
     hideLoading();
 }
 
-// Load grants on page load
-loadGrants();
+// Event listeners
+if (window.ethereum) {
+    window.ethereum.on('accountsChanged', (a) => { if (!a.length) { acct = null; document.getElementById('walletBtn').textContent = 'Connect Wallet'; document.getElementById('walletBtn').classList.remove('connected'); setButtonsEnabled(false); } });
+    window.ethereum.on('chainChanged', (c) => { if (parseInt(c,16) !== CHAIN_ID) { showNote('⚠️ Switch to Studio Next', 'warn'); setButtonsEnabled(false); } });
+}
+
+// Auto-connect if already connected
+(async () => {
+    if (window.ethereum) {
+        try {
+            const a = await window.ethereum.request({ method: 'eth_accounts' });
+            if (a && a.length) { acct = a[0]; const c = await window.ethereum.request({ method: 'eth_chainId' }); if (parseInt(c,16) === CHAIN_ID) { document.getElementById('walletBtn').textContent = `✓ ${acct.slice(0,6)}...${acct.slice(-4)}`; document.getElementById('walletBtn').classList.add('connected'); document.getElementById('walletOverlay').classList.remove('show'); setButtonsEnabled(true); loadGrants(); } }
+        } catch(e) {}
+    }
+})();
+
+// Initially disable buttons until wallet connected
+setButtonsEnabled(false);
 </script>
 </body>
 </html>
