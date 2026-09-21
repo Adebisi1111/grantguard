@@ -6,7 +6,7 @@
     <title>GrantGuard v2</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0f; color: #e0e0e0; padding: 2rem; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0f; color: #e0e0e0; min-height: 100vh; padding: 2rem; }
         .container { max-width: 800px; margin: 0 auto; }
         h1 { font-size: 1.8rem; margin-bottom: 1rem; }
         h2 { color: #15BCDF; margin: 1.5rem 0 1rem; }
@@ -36,7 +36,7 @@
     
     <div id="walletStatus" class="wallet-status disconnected">Not Connected</div>
     
-    <button class="btn btn-p" id="btnConnect" onclick="connectWallet()">Connect Wallet</button>
+    <button class="btn btn-p" id="btnConnect">Connect Wallet</button>
     
     <div id="note" class="note" style="display:none"></div>
     
@@ -67,7 +67,7 @@
         <input type="text" id="grantEvidence" placeholder="GitHub repo, demo URL">
         <label>Deadline</label>
         <input type="date" id="grantDeadline">
-        <button class="btn btn-p" onclick="createGrant()">Create Grant</button>
+        <button class="btn btn-p" id="btnCreate">Create Grant</button>
         <div id="createResult"></div>
     </div>
     
@@ -92,7 +92,7 @@
         <input type="text" id="applyEvidence" placeholder="https://evidence1.com, https://evidence2.com">
         <label>Additional Info</label>
         <textarea id="applyAdditional" placeholder="Any additional information"></textarea>
-        <button class="btn btn-p" onclick="submitApplication()">Submit Application</button>
+        <button class="btn btn-p" id="btnApply">Submit Application</button>
         <div id="applyResult"></div>
     </div>
     
@@ -101,9 +101,9 @@
         <h2>Check Application Status</h2>
         <label>Application ID</label>
         <input type="text" id="checkAppId" placeholder="app_0">
-        <button class="btn btn-p" onclick="checkStatus()">Check Status</button>
-        <button class="btn" onclick="evaluateApp()">Evaluate</button>
-        <button class="btn" onclick="releaseFunds()">Release Funds</button>
+        <button class="btn btn-p" id="btnCheck">Check Status</button>
+        <button class="btn" id="btnEval">Evaluate</button>
+        <button class="btn" id="btnRelease">Release Funds</button>
         <div id="statusResult" style="margin-top:1rem"></div>
     </div>
 </div>
@@ -128,7 +128,6 @@ const ABI = [
 ];
 
 var acct = null;
-var isProcessing = false;
 
 function showNote(msg, type) {
     var el = document.getElementById('note');
@@ -145,36 +144,30 @@ async function rpc(method, params) {
     return j.result;
 }
 
-async function connectWallet() {
-    if (isProcessing) return;
-    if (!window.ethereum) { showNote('MetaMask not detected!', 'err'); return; }
-    if (!window.viem) { showNote('viem not loaded!', 'err'); return; }
-    isProcessing = true;
-    try {
-        var accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-        if (!accounts || !accounts.length) throw new Error('No accounts');
-        acct = accounts[0];
-        var chain = await window.ethereum.request({ method: 'eth_chainId' });
-        if (parseInt(chain, 16) !== 61997) {
-            try { await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [{ chainId: CHAIN, chainName: 'GenLayer Studio Next', rpcUrls: [RPC], nativeCurrency: { name: 'GEN', symbol: 'GEN', decimals: 18 } }] }); } catch(e) {}
-            await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAIN }] });
-        }
-        document.getElementById('walletStatus').textContent = '✓ ' + acct.slice(0,6) + '...' + acct.slice(-4);
-        document.getElementById('walletStatus').className = 'wallet-status connected';
-        document.getElementById('btnConnect').textContent = 'Disconnect';
-        document.getElementById('btnConnect').onclick = disconnectWallet;
-        showNote('Connected!', 'ok');
-        loadGrants();
-    } catch (err) { showNote('Error: ' + err.message, 'err'); }
-    isProcessing = false;
+async function connect() {
+    if (!window.ethereum) { showNote('MetaMask not detected!', 'err'); throw new Error('No wallet'); }
+    if (!window.viem) { showNote('viem not loaded!', 'err'); throw new Error('viem not loaded'); }
+    var accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    if (!accounts || !accounts.length) throw new Error('No accounts');
+    acct = accounts[0];
+    var chain = await window.ethereum.request({ method: 'eth_chainId' });
+    if (parseInt(chain, 16) !== 61997) {
+        showNote('Switch to Studio Next...', 'warn');
+        try { await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [{ chainId: CHAIN, chainName: 'GenLayer Studio Next', rpcUrls: [RPC], nativeCurrency: { name: 'GEN', symbol: 'GEN', decimals: 18 } }] }); } catch(e) {}
+        await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAIN }] });
+    }
+    document.getElementById('walletStatus').textContent = '✓ ' + acct.slice(0,6) + '...' + acct.slice(-4);
+    document.getElementById('walletStatus').className = 'wallet-status connected';
+    document.getElementById('btnConnect').textContent = 'Disconnect';
+    showNote('Connected!', 'ok');
+    loadGrants();
 }
 
-function disconnectWallet() {
+function disconnect() {
     acct = null;
     document.getElementById('walletStatus').textContent = 'Not Connected';
     document.getElementById('walletStatus').className = 'wallet-status disconnected';
     document.getElementById('btnConnect').textContent = 'Connect Wallet';
-    document.getElementById('btnConnect').onclick = connectWallet;
     document.getElementById('grantsList').innerHTML = '<p style="color:#888">Connect wallet to view grants</p>';
 }
 
@@ -208,8 +201,6 @@ async function loadGrants() {
 
 async function createGrant() {
     if (!acct) { showNote('Connect wallet first!', 'err'); return; }
-    if (isProcessing) return;
-    isProcessing = true;
     try {
         var hash = await sendTx('create_grant', [
             document.getElementById('grantId').value,
@@ -223,13 +214,10 @@ async function createGrant() {
         ], 0n);
         document.getElementById('createResult').innerHTML = '<div class="note ok">TX: ' + hash + '</div>';
     } catch (e) { showNote('Error: ' + e.message, 'err'); }
-    isProcessing = false;
 }
 
 async function submitApplication() {
     if (!acct) { showNote('Connect wallet first!', 'err'); return; }
-    if (isProcessing) return;
-    isProcessing = true;
     try {
         var hash = await sendTx('submit_application', [
             document.getElementById('applyGrantId').value,
@@ -244,7 +232,6 @@ async function submitApplication() {
         ], 0n);
         document.getElementById('applyResult').innerHTML = '<div class="note ok">TX: ' + hash + '</div>';
     } catch (e) { showNote('Error: ' + e.message, 'err'); }
-    isProcessing = false;
 }
 
 async function checkStatus() {
@@ -260,32 +247,46 @@ async function checkStatus() {
 
 async function evaluateApp() {
     if (!acct) { showNote('Connect wallet first!', 'err'); return; }
-    if (isProcessing) return;
     var appId = document.getElementById('checkAppId').value.trim();
     if (!appId) { showNote('Enter App ID', 'warn'); return; }
-    isProcessing = true;
     try {
         var hash = await sendTx('evaluate_application', [appId], 0n);
         showNote('Started! TX: ' + hash, 'ok');
     } catch (e) { showNote('Error: ' + e.message, 'err'); }
-    isProcessing = false;
 }
 
 async function releaseFunds() {
     if (!acct) { showNote('Connect wallet first!', 'err'); return; }
-    if (isProcessing) return;
     var appId = document.getElementById('checkAppId').value.trim();
     if (!appId) { showNote('Enter App ID', 'warn'); return; }
-    isProcessing = true;
     try {
         var hash = await sendTx('release_funds', [appId], 0n);
         showNote('Released! TX: ' + hash, 'ok');
     } catch (e) { showNote('Error: ' + e.message, 'err'); }
-    isProcessing = false;
 }
 
+document.getElementById('btnConnect').addEventListener('click', async function() {
+    if (acct) { disconnect(); return; }
+    try {
+        document.getElementById('btnConnect').textContent = 'Connecting...';
+        document.getElementById('btnConnect').disabled = true;
+        showNote('Connecting...', 'warn');
+        await connect();
+    } catch (err) {
+        showNote('Error: ' + err.message, 'err');
+        document.getElementById('btnConnect').textContent = 'Connect Wallet';
+        document.getElementById('btnConnect').disabled = false;
+    }
+});
+
+document.getElementById('btnCreate').addEventListener('click', function() { createGrant(); });
+document.getElementById('btnApply').addEventListener('click', function() { submitApplication(); });
+document.getElementById('btnCheck').addEventListener('click', function() { checkStatus(); });
+document.getElementById('btnEval').addEventListener('click', function() { evaluateApp(); });
+document.getElementById('btnRelease').addEventListener('click', function() { releaseFunds(); });
+
 if (window.ethereum) {
-    window.ethereum.on('accountsChanged', function(a) { if (!a.length) disconnectWallet(); });
+    window.ethereum.on('accountsChanged', function(a) { if (!a.length) disconnect(); });
 }
 </script>
 </body>
