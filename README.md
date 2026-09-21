@@ -1,13 +1,13 @@
 # GrantGuard v2
 
-Grant evaluation platform with **source-grounded evaluation**, **on-chain evidence verification**, and **real escrow/payout**.
+Grant evaluation platform with **source-grounded evaluation**, **on-chain evidence verification**, **real escrow/payout**, and **payout address management**.
 
 ## Deployed on Studio Next (Chain 61997)
 
 | Contract | Address |
 |----------|---------|
-| GrantGuard v2 | `0x671990450Bab8f89144F50B6A619c6382E824172` |
-| Explorer | https://explorer-studio-next.genlayer.com/address/0x671990450Bab8f89144F50B6A619c6382E824172 |
+| GrantGuard v2 | `0xba22BF8161c7B9D2E9A5bED6430EFF0147DDCeB0` |
+| Explorer | https://explorer-studio-next.genlayer.com/address/0xba22BF8161c7B9D2E9A5bED6430EFF0147DDCeB0 |
 
 ## Frontend
 
@@ -16,51 +16,97 @@ Grant evaluation platform with **source-grounded evaluation**, **on-chain eviden
 Features:
 - Wallet connection (MetaMask)
 - View all grants
-- Apply for grants
-- Check application status
+- Create and fund grants
+- Apply for grants with payout address
+- Evaluate applications
+- Release funds to payout address
+- Cancel grants with refund
 
-## Full Testing Flow (via Studio UI)
+## Steward Request Fixes (Resubmission)
 
-### 1. Create Grant
+### 1. Payout Address per Applicant
+- `submit_application()` now validates and stores `payout_address` (must be valid 0x + 40 hex chars)
+- `release_funds()` sends funds to the stored payout address (not a placeholder)
+
+### 2. Cancellation with Refund
+- `cancel_grant()` marks grant as cancelled, refunds remaining balance to creator
+- **Reject repeat cancellation**: Second call raises `ValueError("Grant already cancelled")`
+
+### 3. Repository Tests
+- 9 comprehensive tests covering:
+  - Creating and funding multiple grants
+  - Submitting applications with payout addresses
+  - Evaluating and approving applications
+  - Releasing funds to stored payout addresses
+  - Cancellation with refund verification
+  - Rejecting repeat cancellation
+  - Invalid payout address rejection
+  - Cross-grant balance verification
+
+Run tests:
+```bash
+genlayer test tests/test_payouts_refunds.py --network studio-next
 ```
-genlayer write 0x671990450Bab8f89144F50B6A619c6382E824172 create_grant \
+
+### 4. Fixed Browser Script
+- **Parses correctly**: No syntax errors, all variables defined
+- **Exposes funding action**: Fund Grant section with amount input and button
+- **One configurable contract address**: Single `const CONTRACT = '0xba22...'` used everywhere
+
+## Full Testing Flow
+
+### Create Grant
+```bash
+genlayer write 0xba22BF8161c7B9D2E9A5bED6430EFF0147DDCeB0 create_grant \
   '"test-grant-1"' '"DeFi Innovation Grant"' '"Supporting DeFi projects"' \
   '"Open to all developers"' '"Technical merit and innovation"' \
   '"Max 10000 GEN per project"' '"GitHub repo with working demo"' '"2026-12-31"'
 ```
 
-### 2. Fund Grant
-Send GEN to the contract to fund the grant.
-
-### 3. Apply for Grant
+### Fund Grant
+```bash
+genlayer write 0xba22BF8161c7B9D2E9A5bED6430EFF0147DDCeB0 fund_grant \
+  '"test-grant-1"' --value 1000000000000000000
 ```
-genlayer write 0x671990450Bab8f89144F50B6A619c6382E824172 submit_application \
+
+### Submit Application (with payout address)
+```bash
+genlayer write 0xba22BF8161c7B9D2E9A5bED6430EFF0147DDCeB0 submit_application \
   '"test-grant-1"' '"DeFi Analytics Dashboard"' '"Real-time on-chain analytics"' \
-  '"Solo developer"' '500000000000000000' '"https://example.com"' \
-  '"https://github.com/test/defi-analytics"' '"https://github.com/test/defi-analytics"' '"Test info"'
+  '"Solo developer"' '500000000000000000' \
+  '"0x61fd0047595A30A067f1F21F3b28C4AE8A8e3Dc3"'
 ```
 
-### 4. Check Status
-```
-genlayer call 0x671990450Bab8f89144F50B6A619c6382E824172 get_application '"app_0"'
-```
-
-### 5. Evaluate
-```
-genlayer write 0x671990450Bab8f89144F50B6A619c6382E824172 evaluate_application '"app_0"'
+### Check Status
+```bash
+genlayer call 0xba22BF8161c7B9D2E9A5bED6430EFF0147DDCeB0 get_application '"app_0"'
 ```
 
-### 6. Release Funds (if approved)
+### Evaluate
+```bash
+genlayer write 0xba22BF8161c7B9D2E9A5bED6430EFF0147DDCeB0 evaluate_application '"app_0"'
 ```
-genlayer write 0x671990450Bab8f89144F50B6A619c6382E824172 release_funds '"app_0"'
+
+### Release Funds (to stored payout address)
+```bash
+genlayer write 0xba22BF8161c7B9D2E9A5bED6430EFF0147DDCeB0 release_funds '"app_0"'
+```
+
+### Cancel Grant (with refund)
+```bash
+genlayer write 0xba22BF8161c7B9D2E9A5bED6430EFF0147DDCeB0 cancel_grant '"test-grant-1"'
 ```
 
 ## Key Features for Steward Review
 
-1. **Source-grounded evaluation** — Validators fetch evidence URLs via `gl.nondet.web.render()` and compare against grant criteria
-2. **Prompt-based consensus** — Uses `gl.eq_principle.prompt_comparative()` for LLM evaluation
-3. **Real escrow** — Funds locked until evaluation completes
-4. **Anti-cheat** — Validators independently verify evidence, caller cannot submit fake data
+1. **Payout address validation** — Only valid Ethereum addresses accepted (0x + 40 hex)
+2. **Funds go to stored address** — release_funds sends to applicant's payout_address
+3. **Cancellation refunds** — Remaining balance returned to creator
+4. **No double cancellation** — Second cancel attempt rejected
+5. **Source-grounded evaluation** — Validators fetch evidence URLs via `gl.nondet.web.render()`
+6. **Prompt-based consensus** — Uses `gl.eq_principle.prompt_comparative()` for LLM evaluation
+7. **Real escrow** — Funds locked until evaluation completes
+8. **Anti-cheat** — Validators independently verify evidence
 
 ## Tech Stack
 
@@ -72,4 +118,5 @@ genlayer write 0x671990450Bab8f89144F50B6A619c6382E824172 release_funds '"app_0"
 
 - GitHub: https://github.com/Adebisi1111/grantguard
 - Live: https://adebisi1111.github.io/grantguard/
-- Contract: `0x671990450Bab8f89144F50B6A619c6382E824172`
+- Contract: `0xba22BF8161c7B9D2E9A5bED6430EFF0147DDCeB0`
+- Tests: `tests/test_payouts_refunds.py`

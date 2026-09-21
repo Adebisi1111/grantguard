@@ -7,7 +7,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const CONTRACT = '0x671990450Bab8f89144F50B6A619c6382E824172';
+const CONTRACT = '0xba22BF8161c7B9D2E9A5bED6430EFF0147DDCeB0';
 const CONSENSUS_CONTRACT = '0xb7278A61aa25c888815aFC32Ad3cC52fF24fE575';
 
 const ABI = [

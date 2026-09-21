@@ -20,8 +20,10 @@ class Grant:
     deadline: str
     creator: str
     active: bool
+    cancelled: bool
     funded_amount: gl.u256
     paid_out: gl.u256
+    refunded: gl.u256
 
 
 @allow_storage
@@ -33,6 +35,7 @@ class Application:
     project_description: str
     team_info: str
     requested_amount: gl.u256
+    payout_address: str
     website: str
     github_url: str
     evidence_urls: str
@@ -80,8 +83,10 @@ class GrantGuard(gl.contract.Contract):
             deadline=deadline,
             creator=gl.message.sender_address.as_hex,
             active=True,
+            cancelled=False,
             funded_amount=gl.u256(0),
             paid_out=gl.u256(0),
+            refunded=gl.u256(0),
         )
         self.grants[grant_id] = grant
         self.grant_counter += gl.u256(1)
@@ -94,6 +99,8 @@ class GrantGuard(gl.contract.Contract):
             raise ValueError("Grant not found")
         if not grant.active:
             raise ValueError("Grant is not active")
+        if grant.cancelled:
+            raise ValueError("Grant is cancelled")
         if gl.message.value <= gl.u256(0):
             raise ValueError("Must send GEN to fund grant")
         grant.funded_amount += gl.u256(gl.message.value)
@@ -108,6 +115,7 @@ class GrantGuard(gl.contract.Contract):
         project_description: str,
         team_info: str,
         requested_amount: gl.u256,
+        payout_address: str,
         website: str,
         github_url: str,
         evidence_urls: str,
@@ -118,12 +126,22 @@ class GrantGuard(gl.contract.Contract):
             raise ValueError("Grant not found")
         if not grant.active:
             raise ValueError("Grant is not active")
+        if grant.cancelled:
+            raise ValueError("Grant is cancelled")
         if not project_name or not project_description:
             raise ValueError("Project name and description required")
         if requested_amount <= gl.u256(0):
             raise ValueError("Requested amount must be positive")
         if not evidence_urls:
             raise ValueError("Evidence URLs required")
+
+        # Validate payout address
+        if not payout_address or len(payout_address) != 42 or not payout_address.startswith("0x"):
+            raise ValueError("Invalid payout address: must be 0x + 40 hex chars")
+        try:
+            int(payout_address, 16)
+        except ValueError:
+            raise ValueError("Invalid payout address: not valid hex")
 
         app_id = f"app_{int(self.app_counter)}"
         app = Application(
@@ -133,6 +151,7 @@ class GrantGuard(gl.contract.Contract):
             project_description=project_description,
             team_info=team_info,
             requested_amount=requested_amount,
+            payout_address=payout_address,
             website=website,
             github_url=github_url,
             evidence_urls=evidence_urls,
@@ -222,6 +241,8 @@ GitHub: {app.github_url}
             raise ValueError("Application not found")
         if app.status == "EVALUATED":
             raise ValueError("Already evaluated")
+        if app.status == "PAID":
+            raise ValueError("Already paid")
 
         principle = (
             "All validators must agree the application meets the stored grant criteria "
@@ -263,7 +284,7 @@ GitHub: {app.github_url}
 
     @gl.public.write
     def release_funds(self, app_id: str) -> str:
-        """Release escrow funds to approved applicant."""
+        """Release escrow funds to applicant's stored payout address."""
         app = self.applications.get(app_id)
         if app is None:
             raise ValueError("Application not found")
@@ -273,6 +294,8 @@ GitHub: {app.github_url}
         grant = self.grants.get(app.grant_id)
         if grant is None:
             raise ValueError("Grant not found")
+        if grant.cancelled:
+            raise ValueError("Grant is cancelled")
 
         remaining = grant.funded_amount - grant.paid_out
         if remaining <= gl.u256(0):
@@ -288,23 +311,27 @@ GitHub: {app.github_url}
         app.status = "PAID"
         self.applications[app_id] = app
 
-        # Transfer funds
-        recipient = gl.Address(app.project_name)  # placeholder — actual recipient should be stored
+        # Transfer funds to stored payout address
+        recipient = gl.Address(app.payout_address)
         gl.pay(recipient, amount)
 
-        return f"Released {amount} wei"
+        return f"Released {amount} wei to {app.payout_address}"
 
     @gl.public.write
     def cancel_grant(self, grant_id: str) -> bool:
-        """Cancel grant and refund creator."""
+        """Cancel grant, refund remaining balance to creator, reject repeat cancellation."""
         grant = self.grants.get(grant_id)
         if grant is None:
             raise ValueError("Grant not found")
         if grant.creator != gl.message.sender_address.as_hex:
             raise ValueError("Only creator can cancel")
+        if grant.cancelled:
+            raise ValueError("Grant already cancelled")
         if grant.paid_out > gl.u256(0):
             raise ValueError("Cannot cancel — funds already paid out")
 
+        # Mark as cancelled FIRST (reject repeat cancellation)
+        grant.cancelled = True
         grant.active = False
         self.grants[grant_id] = grant
 
@@ -313,6 +340,8 @@ GitHub: {app.github_url}
         if remaining > gl.u256(0):
             creator = gl.Address(grant.creator)
             gl.pay(creator, remaining)
+            grant.refunded += remaining
+            self.grants[grant_id] = grant
 
         return True
 

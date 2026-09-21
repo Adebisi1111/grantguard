@@ -14,7 +14,7 @@
         label { font-size: .8rem; color: #888; display: block; margin-bottom: .2rem; }
         input, textarea { width: 100%; background: #0a0a0f; border: 1px solid #2a2a3a; color: #e0e0e0; padding: .5rem; border-radius: 6px; font-size: .85rem; margin-bottom: .5rem; font-family: inherit; }
         textarea { resize: vertical; min-height: 50px; }
-        button { background: #15BCDF; color: #fff; border: none; padding: .5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: .85rem; margin-right: .5rem; }
+        button { background: #15BCDF; color: #fff; border: none; padding: .5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: .85rem; margin-right: .5rem; margin-top: .25rem; }
         button:hover { background: #0fa3c2; }
         button:disabled { opacity: .5; cursor: not-allowed; }
         .note { padding: .5rem; border-radius: 6px; margin: .5rem 0; font-size: .8rem; }
@@ -65,6 +65,16 @@
         <button id="b_create">Create Grant</button>
         <div id="o_create"></div>
     </div>
+
+    <div class="card">
+        <h2>Fund Grant</h2>
+        <label>Grant ID</label>
+        <input type="text" id="f_grant" value="test-grant-1">
+        <label>Amount (GEN)</label>
+        <input type="text" id="f_amount" value="1">
+        <button id="b_fund">Fund Grant</button>
+        <div id="o_fund"></div>
+    </div>
     
     <div class="card">
         <h2>Apply for Grant</h2>
@@ -78,6 +88,8 @@
         <input type="text" id="a_team" value="Solo developer">
         <label>Amount (wei)</label>
         <input type="text" id="a_amount" value="500000000000000000">
+        <label>Payout Address (0x...)</label>
+        <input type="text" id="a_payout" value="0x61fd0047595A30A067f1F21F3b28C4AE8A8e3Dc3">
         <label>Website</label>
         <input type="text" id="a_web" value="https://example.com">
         <label>GitHub URL</label>
@@ -101,19 +113,27 @@
         </div>
         <div id="o_status" style="margin-top:.5rem"></div>
     </div>
+
+    <div class="card">
+        <h2>Cancel Grant</h2>
+        <label>Grant ID</label>
+        <input type="text" id="cancel_grant" value="test-grant-1">
+        <button id="b_cancel">Cancel Grant</button>
+        <div id="o_cancel"></div>
+    </div>
 </div>
 
 <script src="viem-iife.js"></script>
 <script>
-const CONTRACT = '0x671990450Bab8f89144F50B6A619c6382E824172';
+const CONTRACT = '0xba22BF8161c7B9D2E9A5bED6430EFF0147DDCeB0';
 const CHAIN = '0x107d';
 const RPC = 'https://studio-next.genlayer.com/api';
-const $ = x => document.getElementById(x);
+const EXPLORER = 'https://explorer-studio-next.genlayer.com/address/';
 
 const ABI = [
     { name: 'create_grant', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'grant_id', type: 'string' }, { name: 'name', type: 'string' }, { name: 'description', type: 'string' }, { name: 'eligibility', type: 'string' }, { name: 'criteria', type: 'string' }, { name: 'budget_rules', type: 'string' }, { name: 'required_evidence', type: 'string' }, { name: 'deadline', type: 'string' }], outputs: [{ type: 'string' }] },
     { name: 'fund_grant', type: 'function', stateMutability: 'payable', inputs: [{ name: 'grant_id', type: 'string' }], outputs: [{ type: 'string' }] },
-    { name: 'submit_application', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'grant_id', type: 'string' }, { name: 'project_name', type: 'string' }, { name: 'project_description', type: 'string' }, { name: 'team_info', type: 'string' }, { name: 'requested_amount', type: 'uint256' }, { name: 'website', type: 'string' }, { name: 'github_url', type: 'string' }, { name: 'evidence_urls', type: 'string' }, { name: 'additional_info', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'submit_application', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'grant_id', type: 'string' }, { name: 'project_name', type: 'string' }, { name: 'project_description', type: 'string' }, { name: 'team_info', type: 'string' }, { name: 'requested_amount', type: 'uint256' }, { name: 'payout_address', type: 'address' }, { name: 'website', type: 'string' }, { name: 'github_url', type: 'string' }, { name: 'evidence_urls', type: 'string' }, { name: 'additional_info', type: 'string' }], outputs: [{ type: 'string' }] },
     { name: 'evaluate_application', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'app_id', type: 'string' }], outputs: [{ type: 'string' }] },
     { name: 'release_funds', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'app_id', type: 'string' }], outputs: [{ type: 'string' }] },
     { name: 'cancel_grant', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'grant_id', type: 'string' }], outputs: [{ type: 'bool' }] },
@@ -122,12 +142,14 @@ const ABI = [
     { name: 'get_stats', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] }
 ];
 
+const $ = x => document.getElementById(x);
+
 let acct = null;
 
 function showNote(m, t) { const e = $('appNote'); e.textContent = m; e.className = 'note show ' + t; e.style.display = 'block'; }
 function hideNote() { $('appNote').style.display = 'none'; }
 function showOut(id, m, err) { const e = $(id); e.textContent = m; e.className = 'note show ' + (err ? 'err' : 'ok'); }
-function setBtn(on) { ['b_create','b_apply','b_check','b_eval','b_release'].forEach(i => { const b = $(i); if (b) b.disabled = !on; }); }
+function setBtn(on) { ['b_create','b_fund','b_apply','b_check','b_eval','b_release','b_cancel'].forEach(i => { const b = $(i); if (b) b.disabled = !on; }); }
 function updateBadge(cls, txt) { $('badge').className = 'badge ' + cls; $('badge').textContent = txt; }
 
 async function rpc(method, params) {
@@ -160,6 +182,7 @@ function disconnect() { acct = null; updateBadge('disc', 'Disconnected'); setBtn
 
 async function sendTx(fn, args, value) {
     const abiItem = ABI.find(f => f.name === fn);
+    if (!abiItem) throw new Error('Unknown function: ' + fn);
     const data = window.viem.encodeFunctionData({ abi: [abiItem], functionName: fn, args });
     return await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: acct, to: CONTRACT, data, value: value ? '0x' + value.toString(16) : '0x0' }] });
 }
@@ -168,7 +191,7 @@ async function loadGrants() {
     const listEl = $('grantsList');
     listEl.innerHTML = '<p style="color:#888">Loading grants...</p>';
     try {
-        const ids = ['test-grant-1', 'test-grant-2', 'test-grant-3', 'grant_0', 'grant_1', 'grant_2'];
+        const ids = ['test-grant-1', 'test-grant-2', 'test-grant-3', 'grant_0', 'grant_1', 'grant_2', 'test-grant-99'];
         let found = [];
         for (let i = 0; i < ids.length; i++) {
             try {
@@ -180,44 +203,59 @@ async function loadGrants() {
             } catch(e) {}
         }
         if (found.length === 0) { listEl.innerHTML = '<p style="color:#888">No grants found</p>'; return; }
-        listEl.innerHTML = found.map(g => `<div class="grant-item" onclick="$('a_grant').value='${g.id}'"><strong>${g.name}</strong><br><small style="color:#888">ID: ${g.id}</small></div>`).join('');
+        listEl.innerHTML = found.map(g => `<div class="grant-item" onclick="$('a_grant').value='${g.id}';$('f_grant').value='${g.id}'"><strong>${g.name}</strong><br><small style="color:#888">ID: ${g.id}</small></div>`).join('');
     } catch (e) { listEl.innerHTML = '<p style="color:#888">Error: ' + e.message + '</p>'; }
 }
 
 // Event listeners
-$('walletBtn').addEventListener('click', async () => { if (acct) { disconnect(); return; } try { $('walletBtn').textContent = 'Connecting...'; $('walletBtn').disabled = true; showNote('Connecting...', 'warn'); await connect(); loadGrants(); } catch (err) { showNote('Error: ' + err.message, 'err'); $('walletBtn').textContent = 'Connect Wallet'; $('walletBtn').disabled = false; } });
+$('walletBtn').addEventListener('click', async () => {
+    if (acct) { disconnect(); return; }
+    try {
+        $('walletBtn').textContent = 'Connecting...';
+        $('walletBtn').disabled = true;
+        showNote('Connecting...', 'warn');
+        await connect();
+        loadGrants();
+    } catch (err) {
+        showNote('Error: ' + err.message, 'err');
+        $('walletBtn').textContent = 'Connect Wallet';
+        $('walletBtn').disabled = false;
+    }
+});
 
 $('b_create').addEventListener('click', async () => {
     try {
         hideNote();
-        const id = $('c_id').value;
-        const name = $('c_name').value;
-        const desc = $('c_desc').value;
-        const elig = $('c_elig').value;
-        const crit = $('c_crit').value;
-        const budget = $('c_budget').value;
-        const evid = $('c_evid').value;
-        const deadline = $('c_deadline').value;
         showOut('o_create', 'Creating...', false);
-        const hash = await sendTx('create_grant', [id, name, desc, elig, crit, budget, evid, deadline], 0n);
-        showOut('o_create', `✅ Created!\nTx: ${hash}`, false);
+        const hash = await sendTx('create_grant', [
+            $('c_id').value, $('c_name').value, $('c_desc').value,
+            $('c_elig').value, $('c_crit').value, $('c_budget').value,
+            $('c_evid').value, $('c_deadline').value
+        ]);
+        showOut('o_create', `✅ Created!\nTx: ${hash}\n${EXPLORER}${CONTRACT}`, false);
     } catch (err) { showOut('o_create', 'Error: ' + err.message, true); }
+});
+
+$('b_fund').addEventListener('click', async () => {
+    try {
+        hideNote();
+        const genAmount = $('f_amount').value;
+        const weiValue = window.viem.parseEther(genAmount);
+        showOut('o_fund', `Funding ${genAmount} GEN...`, false);
+        const hash = await sendTx('fund_grant', [$('f_grant').value], weiValue);
+        showOut('o_fund', `✅ Funded ${genAmount} GEN!\nTx: ${hash}`, false);
+    } catch (err) { showOut('o_fund', 'Error: ' + err.message, true); }
 });
 
 $('b_apply').addEventListener('click', async () => {
     try {
         hideNote();
-        const grant = $('a_grant').value;
-        const name = $('a_name').value;
-        const desc = $('a_desc').value;
-        const team = $('a_team').value || '';
-        const amount = BigInt($('a_amount').value || '0');
-        const web = $('a_web').value || '';
-        const gh = $('a_gh').value || '';
-        const evid = $('a_evid').value;
-        const info = $('a_info').value || '';
         showOut('o_apply', 'Submitting...', false);
-        const hash = await sendTx('submit_application', [grant, name, desc, team, amount, web, gh, evid, info], 0n);
+        const hash = await sendTx('submit_application', [
+            $('a_grant').value, $('a_name').value, $('a_desc').value,
+            $('a_team').value, $('a_amount').value, $('a_payout').value,
+            $('a_web').value, $('a_gh').value, $('a_evid').value, $('a_info').value
+        ]);
         showOut('o_apply', `✅ Submitted!\nTx: ${hash}`, false);
     } catch (err) { showOut('o_apply', 'Error: ' + err.message, true); }
 });
@@ -226,8 +264,8 @@ $('b_check').addEventListener('click', async () => {
     try {
         hideNote();
         const id = $('s_id').value;
-        const sel = window.viem.encodeFunctionData({ abi: [{ name: 'get_application', type: 'function', stateMutability: 'view', inputs: [{ name: 'app_id', type: 'string' }], outputs: [{ type: 'string' }] }], functionName: 'get_application', args: [id] });
-        const result = await rpc('eth_call', [{ to: CONTRACT, data: sel }, 'latest']);
+        const data = window.viem.encodeFunctionData({ abi: [{ name: 'get_application', type: 'function', stateMutability: 'view', inputs: [{ name: 'app_id', type: 'string' }], outputs: [{ type: 'string' }] }], functionName: 'get_application', args: [id] });
+        const result = await rpc('eth_call', [{ to: CONTRACT, data }, 'latest']);
         $('o_status').innerHTML = '<pre>' + result + '</pre>';
     } catch (err) { showOut('o_status', 'Error: ' + err.message, true); }
 });
@@ -237,7 +275,7 @@ $('b_eval').addEventListener('click', async () => {
         hideNote();
         const id = $('s_id').value;
         showOut('o_status', 'Evaluating...', false);
-        const hash = await sendTx('evaluate_application', [id], 0n);
+        const hash = await sendTx('evaluate_application', [id]);
         showOut('o_status', `✅ Evaluation started!\nTx: ${hash}`, false);
     } catch (err) { showOut('o_status', 'Error: ' + err.message, true); }
 });
@@ -246,10 +284,19 @@ $('b_release').addEventListener('click', async () => {
     try {
         hideNote();
         const id = $('s_id').value;
-        showOut('o_status', 'Releasing...', false);
-        const hash = await sendTx('release_funds', [id], 0n);
+        showOut('o_status', 'Releasing funds...', false);
+        const hash = await sendTx('release_funds', [id]);
         showOut('o_status', `✅ Released!\nTx: ${hash}`, false);
     } catch (err) { showOut('o_status', 'Error: ' + err.message, true); }
+});
+
+$('b_cancel').addEventListener('click', async () => {
+    try {
+        hideNote();
+        showOut('o_cancel', 'Cancelling...', false);
+        const hash = await sendTx('cancel_grant', [$('cancel_grant').value]);
+        showOut('o_cancel', `✅ Cancelled!\nTx: ${hash}`, false);
+    } catch (err) { showOut('o_cancel', 'Error: ' + err.message, true); }
 });
 
 if (window.ethereum) {
