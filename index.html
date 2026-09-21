@@ -14,7 +14,7 @@
         label { font-size: .8rem; color: #888; display: block; margin-bottom: .2rem; }
         input, textarea { width: 100%; background: #0a0a0f; border: 1px solid #2a2a3a; color: #e0e0e0; padding: .5rem; border-radius: 6px; font-size: .85rem; margin-bottom: .5rem; font-family: inherit; }
         textarea { resize: vertical; min-height: 50px; }
-        button { background: #15BCDF; color: #fff; border: none; padding: .5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: .85rem; margin-right: .5rem; margin-top: .25rem; }
+        button { background: #15BCDF; color: #fff; border: none; padding: .5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: .85rem; margin-right: .5rem; }
         button:hover { background: #0fa3c2; }
         button:disabled { opacity: .5; cursor: not-allowed; }
         .note { padding: .5rem; border-radius: 6px; margin: .5rem 0; font-size: .8rem; }
@@ -103,13 +103,24 @@
     </div>
 </div>
 
+<script src="viem-iife.js"></script>
 <script>
+const CONTRACT = '0x671990450Bab8f89144F50B6A619c6382E824172';
 const CHAIN = '0x107d';
 const RPC = 'https://studio-next.genlayer.com/api';
-const CONTRACT = '0x671990450Bab8f89144F50B6A619c6382E824172';
-const CONSENSUS = '0xb7278A61aa25c888815aFC32Ad3cC52fF24fE575';
-const API = window.location.origin.includes('localhost') ? 'http://localhost:3000' : 'https://grantguard-56ax.onrender.com';
 const $ = x => document.getElementById(x);
+
+const ABI = [
+    { name: 'create_grant', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'grant_id', type: 'string' }, { name: 'name', type: 'string' }, { name: 'description', type: 'string' }, { name: 'eligibility', type: 'string' }, { name: 'criteria', type: 'string' }, { name: 'budget_rules', type: 'string' }, { name: 'required_evidence', type: 'string' }, { name: 'deadline', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'fund_grant', type: 'function', stateMutability: 'payable', inputs: [{ name: 'grant_id', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'submit_application', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'grant_id', type: 'string' }, { name: 'project_name', type: 'string' }, { name: 'project_description', type: 'string' }, { name: 'team_info', type: 'string' }, { name: 'requested_amount', type: 'uint256' }, { name: 'website', type: 'string' }, { name: 'github_url', type: 'string' }, { name: 'evidence_urls', type: 'string' }, { name: 'additional_info', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'evaluate_application', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'app_id', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'release_funds', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'app_id', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'cancel_grant', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'grant_id', type: 'string' }], outputs: [{ type: 'bool' }] },
+    { name: 'get_grant', type: 'function', stateMutability: 'view', inputs: [{ name: 'grant_id', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'get_application', type: 'function', stateMutability: 'view', inputs: [{ name: 'app_id', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'get_stats', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] }
+];
 
 let acct = null;
 
@@ -126,39 +137,9 @@ async function rpc(method, params) {
     return j.result;
 }
 
-// API helpers
-async function apiEncode(method, args) {
-    const r = await fetch(API + '/api/encode', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method, args })
-    });
-    if (!r.ok) throw new Error('Encoding failed: ' + r.statusText);
-    return r.json();
-}
-
-async function apiSimulate(method, args) {
-    const r = await fetch(API + '/api/simulate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method, args, from: acct })
-    });
-    if (!r.ok) throw new Error('Simulation failed: ' + r.statusText);
-    return r.json();
-}
-
-async function apiRead(method, args) {
-    const r = await fetch(API + '/api/read', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method, args })
-    });
-    if (!r.ok) throw new Error('Read failed: ' + r.statusText);
-    return r.json();
-}
-
 async function connect() {
     if (!window.ethereum) { showNote('MetaMask not detected.', 'err'); throw new Error('No wallet'); }
+    if (!window.viem) { showNote('viem not loaded.', 'err'); throw new Error('viem not loaded'); }
     const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
     if (!accounts || !accounts.length) throw new Error('No accounts');
     acct = accounts[0];
@@ -177,28 +158,10 @@ async function connect() {
 
 function disconnect() { acct = null; updateBadge('disc', 'Disconnected'); setBtn(false); $('walletBtn').textContent = 'Connect Wallet'; $('grantsList').innerHTML = '<p style="color:#888">Connect wallet to view grants</p>'; }
 
-// Send write transaction with simulation pre-flight
-async function sendTx(method, args) {
-    // Step 1: Encode
-    const { data, to } = await apiEncode(method, args);
-    
-    // Step 2: Simulate (dry-run)
-    const sim = await apiSimulate(method, args);
-    if (!sim.success) {
-        throw new Error('Simulation failed: ' + (sim.error || 'Unknown error'));
-    }
-    
-    // Step 3: Send to consensus contract
-    return await window.ethereum.request({ 
-        method: 'eth_sendTransaction', 
-        params: [{ 
-            from: acct, 
-            to: to,
-            data, 
-            value: '0x0',
-            gas: '0x186a00'
-        }] 
-    });
+async function sendTx(fn, args, value) {
+    const abiItem = ABI.find(f => f.name === fn);
+    const data = window.viem.encodeFunctionData({ abi: [abiItem], functionName: fn, args });
+    return await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: acct, to: CONTRACT, data, value: value ? '0x' + value.toString(16) : '0x0' }] });
 }
 
 async function loadGrants() {
@@ -209,8 +172,9 @@ async function loadGrants() {
         let found = [];
         for (let i = 0; i < ids.length; i++) {
             try {
-                const { result } = await apiRead('get_grant', [ids[i]]);
-                if (result && result !== '0x' && result.length > 40) {
+                const sel = window.viem.encodeFunctionData({ abi: [{ name: 'get_grant', type: 'function', stateMutability: 'view', inputs: [{ name: 'grant_id', type: 'string' }], outputs: [{ type: 'string' }] }], functionName: 'get_grant', args: [ids[i]] });
+                const res = await rpc('eth_call', [{ to: CONTRACT, data: sel }, 'latest']);
+                if (res && res !== '0x' && res.length > 40) {
                     found.push({ id: ids[i], name: ids[i] });
                 }
             } catch(e) {}
@@ -221,36 +185,21 @@ async function loadGrants() {
 }
 
 // Event listeners
-$('walletBtn').addEventListener('click', async () => { 
-    if (acct) { disconnect(); return; } 
-    try { 
-        $('walletBtn').textContent = 'Connecting...'; 
-        $('walletBtn').disabled = true; 
-        showNote('Connecting...', 'warn'); 
-        await connect(); 
-        await loadGrants(); 
-    } catch (err) { 
-        showNote('Error: ' + err.message, 'err'); 
-        $('walletBtn').textContent = 'Connect Wallet'; 
-        $('walletBtn').disabled = false; 
-    } 
-});
+$('walletBtn').addEventListener('click', async () => { if (acct) { disconnect(); return; } try { $('walletBtn').textContent = 'Connecting...'; $('walletBtn').disabled = true; showNote('Connecting...', 'warn'); await connect(); loadGrants(); } catch (err) { showNote('Error: ' + err.message, 'err'); $('walletBtn').textContent = 'Connect Wallet'; $('walletBtn').disabled = false; } });
 
 $('b_create').addEventListener('click', async () => {
     try {
         hideNote();
-        const args = [
-            $('c_id').value,
-            $('c_name').value,
-            $('c_desc').value,
-            $('c_elig').value,
-            $('c_crit').value,
-            $('c_budget').value,
-            $('c_evid').value,
-            $('c_deadline').value
-        ];
-        showOut('o_create', 'Simulating...', false);
-        const hash = await sendTx('create_grant', args);
+        const id = $('c_id').value;
+        const name = $('c_name').value;
+        const desc = $('c_desc').value;
+        const elig = $('c_elig').value;
+        const crit = $('c_crit').value;
+        const budget = $('c_budget').value;
+        const evid = $('c_evid').value;
+        const deadline = $('c_deadline').value;
+        showOut('o_create', 'Creating...', false);
+        const hash = await sendTx('create_grant', [id, name, desc, elig, crit, budget, evid, deadline], 0n);
         showOut('o_create', `✅ Created!\nTx: ${hash}`, false);
     } catch (err) { showOut('o_create', 'Error: ' + err.message, true); }
 });
@@ -258,19 +207,17 @@ $('b_create').addEventListener('click', async () => {
 $('b_apply').addEventListener('click', async () => {
     try {
         hideNote();
-        const args = [
-            $('a_grant').value,
-            $('a_name').value,
-            $('a_desc').value,
-            $('a_team').value || '',
-            $('a_amount').value || '0',
-            $('a_web').value || '',
-            $('a_gh').value || '',
-            $('a_evid').value,
-            $('a_info').value || ''
-        ];
-        showOut('o_apply', 'Simulating...', false);
-        const hash = await sendTx('submit_application', args);
+        const grant = $('a_grant').value;
+        const name = $('a_name').value;
+        const desc = $('a_desc').value;
+        const team = $('a_team').value || '';
+        const amount = BigInt($('a_amount').value || '0');
+        const web = $('a_web').value || '';
+        const gh = $('a_gh').value || '';
+        const evid = $('a_evid').value;
+        const info = $('a_info').value || '';
+        showOut('o_apply', 'Submitting...', false);
+        const hash = await sendTx('submit_application', [grant, name, desc, team, amount, web, gh, evid, info], 0n);
         showOut('o_apply', `✅ Submitted!\nTx: ${hash}`, false);
     } catch (err) { showOut('o_apply', 'Error: ' + err.message, true); }
 });
@@ -279,7 +226,8 @@ $('b_check').addEventListener('click', async () => {
     try {
         hideNote();
         const id = $('s_id').value;
-        const { result } = await apiRead('get_application', [id]);
+        const sel = window.viem.encodeFunctionData({ abi: [{ name: 'get_application', type: 'function', stateMutability: 'view', inputs: [{ name: 'app_id', type: 'string' }], outputs: [{ type: 'string' }] }], functionName: 'get_application', args: [id] });
+        const result = await rpc('eth_call', [{ to: CONTRACT, data: sel }, 'latest']);
         $('o_status').innerHTML = '<pre>' + result + '</pre>';
     } catch (err) { showOut('o_status', 'Error: ' + err.message, true); }
 });
@@ -288,8 +236,8 @@ $('b_eval').addEventListener('click', async () => {
     try {
         hideNote();
         const id = $('s_id').value;
-        showOut('o_status', 'Simulating...', false);
-        const hash = await sendTx('evaluate_application', [id]);
+        showOut('o_status', 'Evaluating...', false);
+        const hash = await sendTx('evaluate_application', [id], 0n);
         showOut('o_status', `✅ Evaluation started!\nTx: ${hash}`, false);
     } catch (err) { showOut('o_status', 'Error: ' + err.message, true); }
 });
@@ -298,8 +246,8 @@ $('b_release').addEventListener('click', async () => {
     try {
         hideNote();
         const id = $('s_id').value;
-        showOut('o_status', 'Simulating...', false);
-        const hash = await sendTx('release_funds', [id]);
+        showOut('o_status', 'Releasing...', false);
+        const hash = await sendTx('release_funds', [id], 0n);
         showOut('o_status', `✅ Released!\nTx: ${hash}`, false);
     } catch (err) { showOut('o_status', 'Error: ' + err.message, true); }
 });
