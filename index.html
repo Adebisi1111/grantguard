@@ -55,7 +55,7 @@
         <a onclick="go('create')" id="nav-create">Create Grant</a>
         <a onclick="go('status')" id="nav-status">Check Status</a>
     </div>
-    <button class="wallet-btn" id="walletBtn" onclick="toggleWallet()">Connect Wallet</button>
+    <button class="wallet-btn" id="walletBtn" onclick="connect()">Connect Wallet</button>
 </nav>
 
 <div class="container">
@@ -94,7 +94,7 @@
     <div id="note" class="note"></div>
 </div>
 
-<script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/viem@2.28.0/dist/iife/viem.min.js"></script>
 <script>
 const CONTRACT = '0x671990450Bab8f89144F50B6A619c6382E824172';
 const CHAIN_ID = 61997;
@@ -103,19 +103,32 @@ const RPC = 'https://studio-next.genlayer.com/api';
 const EXPLORER = 'https://explorer-studio-next.genlayer.com/address/' + CONTRACT';
 
 const ABI = [
-    "function create_grant(string grant_id, string name, string description, string eligibility, string criteria, string budget_rules, string required_evidence, string deadline) returns (string)",
-    "function fund_grant(string grant_id) payable returns (string)",
-    "function submit_application(string grant_id, string project_name, string project_description, string team_info, uint256 requested_amount, string website, string github_url, string evidence_urls, string additional_info) returns (string)",
-    "function evaluate_application(string app_id) returns (string)",
-    "function release_funds(string app_id) returns (string)",
-    "function cancel_grant(string grant_id) returns (bool)",
-    "function get_grant(string grant_id) returns (tuple(string id, string name, string description, string eligibility, string criteria, string budget_rules, string required_evidence, string deadline, address creator, bool active, uint256 funded_amount, uint256 paid_out))",
-    "function get_application(string app_id) returns (tuple(string id, string grant_id, string project_name, string project_description, string team_info, uint256 requested_amount, string website, string github_url, string evidence_urls, string additional_info, string status, string evaluation))",
-    "function get_stats() returns (tuple(uint256 total_grants, uint256 total_applications))"
+    { name: 'create_grant', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'grant_id', type: 'string' }, { name: 'name', type: 'string' }, { name: 'description', type: 'string' }, { name: 'eligibility', type: 'string' }, { name: 'criteria', type: 'string' }, { name: 'budget_rules', type: 'string' }, { name: 'required_evidence', type: 'string' }, { name: 'deadline', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'fund_grant', type: 'function', stateMutability: 'payable', inputs: [{ name: 'grant_id', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'submit_application', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'grant_id', type: 'string' }, { name: 'project_name', type: 'string' }, { name: 'project_description', type: 'string' }, { name: 'team_info', type: 'string' }, { name: 'requested_amount', type: 'uint256' }, { name: 'website', type: 'string' }, { name: 'github_url', type: 'string' }, { name: 'evidence_urls', type: 'string' }, { name: 'additional_info', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'evaluate_application', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'app_id', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'release_funds', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'app_id', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'cancel_grant', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'grant_id', type: 'string' }], outputs: [{ type: 'bool' }] },
+    { name: 'get_grant', type: 'function', stateMutability: 'view', inputs: [{ name: 'grant_id', type: 'string' }], outputs: [{ type: 'tuple', components: [{ name: 'id', type: 'string' }, { name: 'name', type: 'string' }, { name: 'description', type: 'string' }, { name: 'eligibility', type: 'string' }, { name: 'criteria', type: 'string' }, { name: 'budget_rules', type: 'string' }, { name: 'required_evidence', type: 'string' }, { name: 'deadline', type: 'string' }, { name: 'creator', type: 'address' }, { name: 'active', type: 'bool' }, { name: 'funded_amount', type: 'uint256' }, { name: 'paid_out', type: 'uint256' }] }] },
+    { name: 'get_application', type: 'function', stateMutability: 'view', inputs: [{ name: 'app_id', type: 'string' }], outputs: [{ type: 'tuple', components: [{ name: 'id', type: 'string' }, { name: 'grant_id', type: 'string' }, { name: 'project_name', type: 'string' }, { name: 'project_description', type: 'string' }, { name: 'team_info', type: 'string' }, { name: 'requested_amount', type: 'uint256' }, { name: 'website', type: 'string' }, { name: 'github_url', type: 'string' }, { name: 'evidence_urls', type: 'string' }, { name: 'additional_info', type: 'string' }, { name: 'status', type: 'string' }, { name: 'evaluation', type: 'string' }] }] },
+    { name: 'get_stats', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'tuple', components: [{ name: 'total_grants', type: 'uint256' }, { name: 'total_applications', type: 'uint256' }] }] }
 ];
 
-var contract = null;
+const studioNext = {
+    id: CHAIN_ID,
+    name: 'Studio Next',
+    rpcUrls: { default: { http: [RPC] } },
+    nativeCurrency: { name: 'GEN', symbol: 'GEN', decimals: 18 },
+    testnet: true,
+    consensusMainContract: { address: '0x0112Bf6e83497965A5fdD6Dad1E447a6E004271D', abi: [] },
+    defaultNumberOfInitialValidators: 5,
+    defaultConsensusMaxRotations: 3,
+};
+
+var publicClient = null;
+var walletClient = null;
 var acct = null;
+var grants = [];
 var isProcessing = false;
 
 function note(msg, type) {
@@ -135,27 +148,25 @@ function go(page) {
     for (var i = 0; i < navs.length; i++) navs[i].classList.remove('active');
     document.getElementById('page-' + page).classList.add('active');
     document.getElementById('nav-' + page).classList.add('active');
-    if (page === 'grants' && contract) loadGrants();
+    if (page === 'grants' && publicClient) loadGrants();
 }
 
-async function toggleWallet() {
-    if (isProcessing) return;
-    if (acct) {
-        acct = null; contract = null;
-        document.getElementById('walletBtn').textContent = 'Connect Wallet';
-        document.getElementById('walletBtn').classList.remove('connected');
-        document.getElementById('grants-list').innerHTML = '<p style="color:#888">Connect wallet to view grants</p>';
-        return;
-    }
+async function connect() {
     if (!window.ethereum) { note('MetaMask not detected!', 'err'); return; }
-    if (typeof ethers === 'undefined') { note('Ethers.js not loaded!', 'err'); return; }
+    if (!window.viem) { note('viem not loaded!', 'err'); return; }
+    if (isProcessing) return;
     isProcessing = true;
     try {
-        var provider = new ethers.providers.Web3Provider(window.ethereum);
-        await provider.send("eth_requestAccounts", []);
-        var signer = provider.getSigner();
-        acct = await signer.getAddress();
-        contract = new ethers.Contract(CONTRACT, ABI, signer);
+        var accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        if (!accounts || !accounts.length) throw new Error('No accounts');
+        acct = accounts[0];
+        var chain = await window.ethereum.request({ method: 'eth_chainId' });
+        if (parseInt(chain, 16) !== CHAIN_ID) {
+            try { await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [{ chainId: CHAIN_HEX, chainName: 'GenLayer Studio Next', rpcUrls: [RPC], nativeCurrency: { name: 'GEN', symbol: 'GEN', decimals: 18 } }] }); } catch(e) {}
+            await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAIN_HEX }] });
+        }
+        publicClient = window.viem.createPublicClient({ chain: studioNext, transport: window.viem.http() });
+        walletClient = window.viem.createWalletClient({ chain: studioNext, transport: window.viem.custom(window.ethereum) });
         document.getElementById('walletBtn').textContent = '✓ ' + acct.slice(0,6) + '...' + acct.slice(-4);
         document.getElementById('walletBtn').classList.add('connected');
         note('Connected!', 'ok');
@@ -164,23 +175,31 @@ async function toggleWallet() {
     isProcessing = false;
 }
 
+function disconnect() {
+    acct = null; publicClient = null; walletClient = null;
+    document.getElementById('walletBtn').textContent = 'Connect Wallet';
+    document.getElementById('walletBtn').classList.remove('connected');
+    document.getElementById('grants-list').innerHTML = '<p style="color:#888">Connect wallet to view grants</p>';
+}
+
 async function loadGrants() {
     var listEl = document.getElementById('grants-list');
     listEl.innerHTML = '<p style="color:#888">Loading...</p>';
     try {
-        var stats = await contract.get_stats();
-        var total = Number(stats.total_grants);
+        var stats = await publicClient.readContract({ address: CONTRACT, abi: ABI, functionName: 'get_stats', args: [] });
+        var total = Number(stats.total_grants || stats[0]);
         if (total === 0) { listEl.innerHTML = '<p style="color:#888">No grants found</p>'; return; }
         var found = [];
         var ids = ['test-grant-1', 'test-grant-2', 'test-grant-3', 'grant_0', 'grant_1', 'grant_2'];
         for (var i = 0; i < ids.length; i++) {
             try {
-                var g = await contract.get_grant(ids[i]);
-                if (g && g.id) found.push({ id: g.id, name: g.name });
+                var g = await publicClient.readContract({ address: CONTRACT, abi: ABI, functionName: 'get_grant', args: [ids[i]] });
+                if (g && (g.id || g[0])) found.push({ id: ids[i], name: g.name || g[1] });
             } catch(e) {}
         }
-        if (found.length === 0) { listEl.innerHTML = '<p style="color:#888">No grants found</p>'; return; }
-        listEl.innerHTML = found.map(function(g) {
+        grants = found;
+        if (grants.length === 0) { listEl.innerHTML = '<p style="color:#888">No grants found</p>'; return; }
+        listEl.innerHTML = grants.map(function(g) {
             return '<div class="card grant-card" onclick="viewGrant(\'' + g.id + '\')"><h3>' + g.name + '</h3><div class="meta">ID: ' + g.id + '</div></div>';
         }).join('');
     } catch (e) { listEl.innerHTML = '<p style="color:#888">Error: ' + e.message + '</p>'; }
@@ -199,8 +218,8 @@ function viewGrant(id) {
         isProcessing = true;
         loading('Submitting...');
         try {
-            var tx = await contract.submit_application(id, document.getElementById('app-name').value, document.getElementById('app-description').value, '', document.getElementById('app-amount').value || '0', '', document.getElementById('app-github').value, document.getElementById('app-evidence').value, '');
-            document.getElementById('apply-result').innerHTML = '<div class="note show ok">TX: ' + tx.hash + '</div>';
+            var req = await walletClient.writeContract({ address: CONTRACT, abi: ABI, functionName: 'submit_application', args: [id, document.getElementById('app-name').value, document.getElementById('app-description').value, '', BigInt(document.getElementById('app-amount').value || '0'), '', document.getElementById('app-github').value, document.getElementById('app-evidence').value, ''] });
+            document.getElementById('apply-result').innerHTML = '<div class="note show ok">TX: ' + req + '</div>';
         } catch (e) { note('Error: ' + e.message, 'err'); }
         isProcessing = false;
         loaded();
@@ -212,8 +231,8 @@ async function fundGrant(id) {
     isProcessing = true;
     loading('Funding...');
     try {
-        var tx = await contract.fund_grant(id, { value: '1000000000000000000' });
-        document.getElementById('fund-result').innerHTML = '<div class="note show ok">TX: ' + tx.hash + '</div>';
+        var req = await walletClient.writeContract({ address: CONTRACT, abi: ABI, functionName: 'fund_grant', args: [id], value: 1000000000000000000n });
+        document.getElementById('fund-result').innerHTML = '<div class="note show ok">TX: ' + req + '</div>';
     } catch (e) { note('Error: ' + e.message, 'err'); }
     isProcessing = false;
     loaded();
@@ -226,8 +245,8 @@ document.getElementById('create-form').onsubmit = async function(e) {
     document.getElementById('btn-create').disabled = true;
     loading('Publishing...');
     try {
-        var tx = await contract.create_grant(document.getElementById('grant-id').value, document.getElementById('grant-name').value, document.getElementById('grant-description').value, document.getElementById('grant-eligibility').value, document.getElementById('grant-criteria').value, document.getElementById('grant-budget').value, document.getElementById('grant-evidence').value, document.getElementById('grant-deadline').value);
-        document.getElementById('create-result').innerHTML = '<div class="note show ok">TX: ' + tx.hash + '</div>';
+        var req = await walletClient.writeContract({ address: CONTRACT, abi: ABI, functionName: 'create_grant', args: [document.getElementById('grant-id').value, document.getElementById('grant-name').value, document.getElementById('grant-description').value, document.getElementById('grant-eligibility').value, document.getElementById('grant-criteria').value, document.getElementById('grant-budget').value, document.getElementById('grant-evidence').value, document.getElementById('grant-deadline').value] });
+        document.getElementById('create-result').innerHTML = '<div class="note show ok">TX: ' + req + '</div>';
     } catch (e) { note('Error: ' + e.message, 'err'); }
     document.getElementById('btn-create').disabled = false;
     isProcessing = false;
@@ -239,8 +258,8 @@ async function checkStatus() {
     if (!appId) { note('Enter App ID', 'warn'); return; }
     loading('Checking...');
     try {
-        var r = await contract.get_application(appId);
-        document.getElementById('status-result').innerHTML = '<div class="card"><pre>' + JSON.stringify(r, null, 2) + '</pre></div><button class="btn btn-p" onclick="evaluateApp(\'' + appId + '\')">Evaluate</button>';
+        var result = await publicClient.readContract({ address: CONTRACT, abi: ABI, functionName: 'get_application', args: [appId] });
+        document.getElementById('status-result').innerHTML = '<div class="card"><pre>' + JSON.stringify(result, null, 2) + '</pre></div><button class="btn btn-p" onclick="evaluateApp(\'' + appId + '\')">Evaluate</button>';
     } catch (e) { note('Error: ' + e.message, 'err'); }
     loaded();
 }
@@ -250,15 +269,15 @@ async function evaluateApp(appId) {
     isProcessing = true;
     loading('Evaluating...');
     try {
-        var tx = await contract.evaluate_application(appId);
-        note('Started! TX: ' + tx.hash, 'ok');
+        var req = await walletClient.writeContract({ address: CONTRACT, abi: ABI, functionName: 'evaluate_application', args: [appId] });
+        note('Started! TX: ' + req, 'ok');
     } catch (e) { note('Error: ' + e.message, 'err'); }
     isProcessing = false;
     loaded();
 }
 
 if (window.ethereum) {
-    window.ethereum.on('accountsChanged', function(a) { if (!a.length) { acct = null; contract = null; document.getElementById('walletBtn').textContent = 'Connect Wallet'; document.getElementById('walletBtn').classList.remove('connected'); } });
+    window.ethereum.on('accountsChanged', function(a) { if (!a.length) disconnect(); });
 }
 </script>
 </body>
