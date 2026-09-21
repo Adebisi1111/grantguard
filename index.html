@@ -13,39 +13,30 @@
         .nav-links a { font-weight: 700; font-size: .9rem; color: #888; cursor: pointer; }
         .nav-links a:hover, .nav-links a.active { color: #15BCDF; }
         .wallet-btn { border: 1px solid #15BCDF; color: #15BCDF; background: transparent; padding: .5rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 700; }
-        .wallet-btn:hover { background: #15BCDF; color: #fff; }
         .wallet-btn.connected { background: #52e0a1; border-color: #52e0a1; color: #000; }
         .container { max-width: 900px; margin: 0 auto; padding: 2rem; }
         .page { display: none; }
         .page.active { display: block; }
         .card { background: #161620; border: 1px solid #2a2a3a; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
-        .card:hover { border-color: #15BCDF; }
         h1 { font-size: 1.8rem; margin-bottom: .5rem; }
-        h2 { color: #15BCDF; margin-bottom: 1rem; }
-        h3 { color: #15BCDF; margin-bottom: .75rem; }
+        h2, h3 { color: #15BCDF; margin-bottom: 1rem; }
         .subtitle { color: #888; margin-bottom: 2rem; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
         label { font-size: .75rem; color: #888; display: block; margin-bottom: .25rem; text-transform: uppercase; }
         input, textarea { width: 100%; background: #0a0a0f; border: 1px solid #2a2a3a; color: #e0e0e0; padding: .6rem; border-radius: 8px; font-size: .9rem; font-family: inherit; }
-        input:focus, textarea:focus { outline: none; border-color: #15BCDF; }
         textarea { resize: vertical; min-height: 80px; }
         .row { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1rem; }
-        .btn { border: 1px solid #15BCDF; color: #15BCDF; background: transparent; padding: .6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: .85rem; font-family: inherit; }
+        .btn { border: 1px solid #15BCDF; color: #15BCDF; background: transparent; padding: .6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: .85rem; }
         .btn:hover { background: #15BCDF; color: #fff; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-p { background: #15BCDF; color: #fff; }
         .btn-s { border-color: #52e0a1; color: #52e0a1; }
-        .btn-s:hover { background: #52e0a1; color: #000; }
         .btn-d { border-color: #ff5c7a; color: #ff5c7a; }
-        .btn-d:hover { background: #ff5c7a; color: #fff; }
         .btn-w { border-color: #ffd93d; color: #ffd93d; }
-        .btn-w:hover { background: #ffd93d; color: #000; }
         .note { border-radius: 8px; padding: .75rem; margin-bottom: 1rem; font-size: .85rem; display: none; }
         .note.show { display: block; }
         .note.err { background: rgba(255,92,122,.1); color: #ff5c7a; }
         .note.ok { background: rgba(82,224,161,.1); color: #52e0a1; }
-        .note.warn { background: rgba(255,217,61,.1); color: #ffd93d; }
-        .grant-card { cursor: pointer; transition: border-color 0.2s; }
+        .grant-card { cursor: pointer; }
         .grant-card:hover { border-color: #15BCDF; }
         .grant-card h3 { color: #15BCDF; margin-bottom: .5rem; }
         .grant-card .meta { color: #888; font-size: .85rem; margin-top: .5rem; }
@@ -76,7 +67,6 @@
     <div id="page-create" class="page">
         <h1>Create Grant</h1>
         <p class="subtitle">Publish a new grant opportunity</p>
-        <div id="create-note" class="note"></div>
         <form id="create-form">
             <div class="grid">
                 <div><label>Grant ID *</label><input type="text" id="grant-id" required></div>
@@ -103,14 +93,29 @@
     <div id="note" class="note"></div>
 </div>
 
+<script src="https://cdn.ethers.io/lib/ethers-5.7.umd.min.js"></script>
 <script>
-const API = 'https://grantguard-56ax.onrender.com';
 const CONTRACT = '0x671990450Bab8f89144F50B6A619c6382E824172';
 const CHAIN_ID = 61997;
 const CHAIN_HEX = '0x107d';
 const RPC = 'https://studio-next.genlayer.com/api';
 const EXPLORER = 'https://explorer-studio-next.genlayer.com/address/' + CONTRACT;
 
+const ABI = [
+    "function create_grant(string grant_id, string name, string description, string eligibility, string criteria, string budget_rules, string required_evidence, string deadline) returns (string)",
+    "function fund_grant(string grant_id) payable returns (string)",
+    "function submit_application(string grant_id, string project_name, string project_description, string team_info, uint256 requested_amount, string website, string github_url, string evidence_urls, string additional_info) returns (string)",
+    "function evaluate_application(string app_id) returns (string)",
+    "function release_funds(string app_id) returns (string)",
+    "function cancel_grant(string grant_id) returns (bool)",
+    "function get_grant(string grant_id) returns (tuple(string id, string name, string description, string eligibility, string criteria, string budget_rules, string required_evidence, string deadline, address creator, bool active, uint256 funded_amount, uint256 paid_out))",
+    "function get_application(string app_id) returns (tuple(string id, string grant_id, string project_name, string project_description, string team_info, uint256 requested_amount, string website, string github_url, string evidence_urls, string additional_info, string status, string evaluation))",
+    "function get_stats() returns (tuple(uint256 total_grants, uint256 total_applications))"
+];
+
+var provider = null;
+var signer = null;
+var contract = null;
 var acct = null;
 var grants = [];
 
@@ -136,7 +141,7 @@ function go(page) {
 
 async function toggleWallet() {
     if (acct) {
-        acct = null;
+        acct = null; provider = null; signer = null; contract = null;
         document.getElementById('walletBtn').textContent = 'Connect Wallet';
         document.getElementById('walletBtn').classList.remove('connected');
         note('Wallet disconnected', 'ok');
@@ -144,146 +149,92 @@ async function toggleWallet() {
     }
     if (!window.ethereum) { note('MetaMask not detected!', 'err'); return; }
     try {
-        var accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-        if (!accounts || !accounts.length) throw new Error('No accounts');
-        acct = accounts[0];
-        var chain = await window.ethereum.request({ method: 'eth_chainId' });
-        if (parseInt(chain, 16) !== CHAIN_ID) {
+        var ethers = window.ethers;
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        acct = await signer.getAddress();
+        var network = await provider.getNetwork();
+        if (network.chainId !== CHAIN_ID) {
             try { await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [{ chainId: CHAIN_HEX, chainName: 'GenLayer Studio Next', rpcUrls: [RPC], nativeCurrency: { name: 'GEN', symbol: 'GEN', decimals: 18 } }] }); } catch(e) {}
             await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAIN_HEX }] });
+            provider = new ethers.providers.Web3Provider(window.ethereum);
+            signer = provider.getSigner();
         }
+        contract = new ethers.Contract(CONTRACT, ABI, signer);
         document.getElementById('walletBtn').textContent = '✓ ' + acct.slice(0,6) + '...' + acct.slice(-4);
         document.getElementById('walletBtn').classList.add('connected');
         note('Wallet connected!', 'ok');
-    } catch (e) {
-        note('Error: ' + e.message, 'err');
-    }
-}
-
-async function sendTx(endpoint, body) {
-    if (!acct) { note('Connect wallet first!', 'err'); throw new Error('No wallet'); }
-    var response = await fetch(API + endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-    });
-    if (!response.ok) {
-        var err = await response.json();
-        throw new Error(err.detail || 'Transaction failed');
-    }
-    return response.json();
+        loadGrants();
+    } catch (e) { note('Error: ' + e.message, 'err'); }
 }
 
 async function loadGrants() {
     var listEl = document.getElementById('grants-list');
     listEl.innerHTML = '<p style="color:#888">Loading grants...</p>';
-    
+    if (!contract) { listEl.innerHTML = '<p style="color:#888">Connect wallet first</p>'; return; }
     try {
-        // Get stats from backend
-        var stats = await fetch(API + '/api/stats').then(r => r.json());
-        var totalGrants = parseInt(stats.total_grants);
-        
-        if (totalGrants === 0) {
-            listEl.innerHTML = '<p style="color:#888">No grants found. Create the first one!</p>';
-            return;
-        }
-        
-        // Try to fetch grants by common IDs
+        var stats = await contract.get_stats();
+        var totalGrants = Number(stats.total_grants);
+        if (totalGrants === 0) { listEl.innerHTML = '<p style="color:#888">No grants found. Create the first one!</p>'; return; }
         var found = [];
         var idsToTry = ['test-grant-1', 'test-grant-2', 'test-grant-3', 'grant_0', 'grant_1', 'grant_2'];
-        
         for (var i = 0; i < idsToTry.length; i++) {
             try {
-                var response = await fetch(API + '/api/grants/' + encodeURIComponent(idsToTry[i]));
-                if (response.ok) {
-                    var grant = await response.json();
-                    if (grant && grant.id) {
-                        found.push({ id: grant.id, name: grant.name });
-                    }
-                }
+                var grant = await contract.get_grant(idsToTry[i]);
+                if (grant && grant.id) found.push({ id: grant.id, name: grant.name });
             } catch(e) {}
         }
-        
         grants = found;
-        
         if (grants.length === 0) {
             listEl.innerHTML = '<p style="color:#888">No grants found. Create the first one!</p>';
         } else {
             listEl.innerHTML = grants.map(function(g) {
-                return '<div class="card grant-card" onclick="viewGrant(\'' + g.id + '\')">' +
-                    '<h3>' + g.name + '</h3>' +
-                    '<div class="meta">ID: ' + g.id + ' · Click to view details and apply</div>' +
-                '</div>';
+                return '<div class="card grant-card" onclick="viewGrant(\'' + g.id + '\')"><h3>' + g.name + '</h3><div class="meta">ID: ' + g.id + ' · Click to view</div></div>';
             }).join('');
         }
-    } catch (e) {
-        listEl.innerHTML = '<p style="color:#888">Error: ' + e.message + '</p>';
-    }
+    } catch (e) { listEl.innerHTML = '<p style="color:#888">Error: ' + e.message + '</p>'; }
 }
 
 function viewGrant(id) {
     var grant = grants.find(function(g) { return g.id === id; });
     go('detail');
     document.getElementById('detail-content').innerHTML = 
-        '<div style="margin-bottom:1.5rem">' +
-            '<h2>' + (grant ? grant.name : id) + '</h2>' +
-            '<p style="color:#888">Grant ID: ' + id + '</p>' +
-            '<p style="color:#888;margin-top:.5rem">View on <a href="' + EXPLORER + '" target="_blank">Explorer</a></p>' +
-        '</div>' +
+        '<h2>' + (grant ? grant.name : id) + '</h2>' +
+        '<p style="color:#888">ID: ' + id + '</p>' +
+        '<p><a href="' + EXPLORER + '" target="_blank">View on Explorer</a></p>' +
         '<div class="row"><button class="btn btn-w" onclick="fundGrant(\'' + id + '\')">Fund Grant</button></div>' +
-        '<div id="fund-result" style="margin-top:1rem"></div>' +
-        '<h3 style="margin:1.5rem 0 1rem">Apply for this Grant</h3>' +
+        '<div id="fund-result"></div>' +
+        '<h3 style="margin-top:1.5rem">Apply for this Grant</h3>' +
         '<form id="apply-form">' +
-            '<div class="grid">' +
-                '<div><label>Project Name *</label><input type="text" id="app-name" required></div>' +
-                '<div><label>Requested Amount (wei)</label><input type="text" id="app-amount" placeholder="500000000000000000"></div>' +
-            '</div>' +
-            '<div><label>Project Description *</label><textarea id="app-description" required></textarea></div>' +
-            '<div><label>Team Information</label><textarea id="app-team"></textarea></div>' +
-            '<div class="grid">' +
-                '<div><label>Website</label><input type="text" id="app-website" placeholder="https://"></div>' +
-                '<div><label>GitHub URL</label><input type="text" id="app-github" placeholder="https://github.com/"></div>' +
-            '</div>' +
-            '<div><label>Evidence URLs (comma-separated) *</label><input type="text" id="app-evidence" placeholder="https://evidence1.com, https://evidence2.com" required></div>' +
+            '<div class="grid"><div><label>Project Name *</label><input type="text" id="app-name" required></div><div><label>Amount (wei)</label><input type="text" id="app-amount" placeholder="500000000000000000"></div></div>' +
+            '<div><label>Description *</label><textarea id="app-description" required></textarea></div>' +
+            '<div><label>Team Info</label><textarea id="app-team"></textarea></div>' +
+            '<div class="grid"><div><label>Website</label><input type="text" id="app-website"></div><div><label>GitHub URL</label><input type="text" id="app-github"></div></div>' +
+            '<div><label>Evidence URLs *</label><input type="text" id="app-evidence" required></div>' +
             '<div><label>Additional Info</label><textarea id="app-additional"></textarea></div>' +
             '<button type="submit" class="btn btn-p">Submit Application</button>' +
         '</form>' +
-        '<div id="apply-result" style="margin-top:1rem"></div>';
-    
+        '<div id="apply-result"></div>';
     document.getElementById('apply-form').onsubmit = async function(e) {
         e.preventDefault();
-        loading('Submitting application...');
+        loading('Submitting...');
         try {
-            var result = await sendTx('/api/applications', {
-                grant_id: id,
-                project_name: document.getElementById('app-name').value,
-                project_description: document.getElementById('app-description').value,
-                team_info: document.getElementById('app-team').value,
-                requested_amount: document.getElementById('app-amount').value,
-                website: document.getElementById('app-website').value,
-                github_url: document.getElementById('app-github').value,
-                evidence_urls: document.getElementById('app-evidence').value,
-                additional_info: document.getElementById('app-additional').value
-            });
-            document.getElementById('apply-result').innerHTML = '<div class="note show ok">✅ Application submitted!<br>App ID: <code>' + result.app_id + '</code><br>TX: <code>' + result.tx_hash + '</code></div>';
-            document.getElementById('apply-form').reset();
-        } catch (e) {
-            note('Error: ' + e.message, 'err');
-        }
+            var tx = await contract.submit_application(id, document.getElementById('app-name').value, document.getElementById('app-description').value, document.getElementById('app-team').value, document.getElementById('app-amount').value || '0', document.getElementById('app-website').value, document.getElementById('app-github').value, document.getElementById('app-evidence').value, document.getElementById('app-additional').value);
+            document.getElementById('apply-result').innerHTML = '<div class="note show ok">✅ Submitted!<br>TX: ' + tx.hash + '</div>';
+        } catch (e) { note('Error: ' + e.message, 'err'); }
         loaded();
     };
 }
 
 async function fundGrant(grantId) {
-    var amount = prompt('Enter amount to fund (in wei):', '1000000000000000000');
+    var amount = prompt('Amount in wei:', '1000000000000000000');
     if (!amount) return;
-    loading('Funding grant...');
+    loading('Funding...');
     try {
-        var result = await sendTx('/api/grants/' + grantId + '/fund', { value: amount });
-        document.getElementById('fund-result').innerHTML = '<div class="note show ok">✅ Funded!<br>TX: <code>' + result.tx_hash + '</code></div>';
-    } catch (e) {
-        note('Error: ' + e.message, 'err');
-    }
+        var tx = await contract.fund_grant(grantId, { value: amount });
+        document.getElementById('fund-result').innerHTML = '<div class="note show ok">✅ Funded!<br>TX: ' + tx.hash + '</div>';
+    } catch (e) { note('Error: ' + e.message, 'err'); }
     loaded();
 }
 
@@ -291,116 +242,70 @@ document.getElementById('create-form').onsubmit = async function(e) {
     e.preventDefault();
     loading('Publishing grant...');
     try {
-        var result = await sendTx('/api/grants', {
-            grant_id: document.getElementById('grant-id').value,
-            name: document.getElementById('grant-name').value,
-            description: document.getElementById('grant-description').value,
-            eligibility: document.getElementById('grant-eligibility').value,
-            criteria: document.getElementById('grant-criteria').value,
-            budget_rules: document.getElementById('grant-budget').value,
-            required_evidence: document.getElementById('grant-evidence').value,
-            deadline: document.getElementById('grant-deadline').value
-        });
-        document.getElementById('create-result').innerHTML = '<div class="note show ok">✅ Grant published!<br>ID: <code>' + result.grant_id + '</code><br>TX: <code>' + result.tx_hash + '</code></div>';
+        var tx = await contract.create_grant(document.getElementById('grant-id').value, document.getElementById('grant-name').value, document.getElementById('grant-description').value, document.getElementById('grant-eligibility').value, document.getElementById('grant-criteria').value, document.getElementById('grant-budget').value, document.getElementById('grant-evidence').value, document.getElementById('grant-deadline').value);
+        document.getElementById('create-result').innerHTML = '<div class="note show ok">✅ Published!<br>TX: ' + tx.hash + '</div>';
         document.getElementById('create-form').reset();
-        note('Grant created! Go to Grants tab to see it.', 'ok');
-    } catch (e) {
-        note('Error: ' + e.message, 'err');
-    }
+    } catch (e) { note('Error: ' + e.message, 'err'); }
     loaded();
 };
 
 async function checkStatus() {
     var appId = document.getElementById('check-app-id').value.trim();
-    if (!appId) { note('Enter application ID', 'warn'); return; }
-    loading('Checking status...');
+    if (!appId) { note('Enter App ID', 'warn'); return; }
+    loading('Checking...');
     try {
-        var app = await fetch(API + '/api/applications/' + encodeURIComponent(appId)).then(r => r.json());
-        var resultEl = document.getElementById('status-result');
-        var html = '<div class="card" style="margin-top:1rem">' +
-            '<h2>Application: ' + appId + '</h2>' +
-            '<p><strong>Project:</strong> ' + app.project_name + '</p>' +
-            '<p><strong>Status:</strong> ' + app.status + '</p>' +
-            '<p><strong>Grant ID:</strong> ' + app.grant_id + '</p>' +
-            '<p><strong>Requested:</strong> ' + (Number(app.requested_amount) / 1e18).toFixed(2) + ' GEN</p>';
-        
-        if (app.evaluation) {
-            try {
-                var ev = typeof app.evaluation === 'string' ? JSON.parse(app.evaluation) : app.evaluation;
-                html += '<div style="margin-top:1rem;padding:1rem;background:#0a0a0f;border-radius:8px">';
-                html += '<h3>Evaluation Result</h3>';
-                html += '<p><strong>Final:</strong> ' + ev.final + '</p>';
-                html += '<p><strong>Eligibility:</strong> ' + ev.eligibility + '</p>';
-                html += '<p><strong>Criteria:</strong> ' + ev.criteria + '</p>';
-                html += '<p><strong>Budget:</strong> ' + ev.budget + '</p>';
-                html += '<p><strong>Evidence:</strong> ' + ev.evidence + '</p>';
-                if (ev.reasons && ev.reasons.length > 0) {
-                    html += '<h4>Reasons:</h4><ul>' + ev.reasons.map(function(r) { return '<li>' + r + '</li>'; }).join('') + '</ul>';
-                }
-                html += '</div>';
-            } catch(e) {}
+        var result = await contract.get_application(appId);
+        var html = '<div class="card"><h2>App: ' + appId + '</h2><p>Project: ' + result.project_name + '</p><p>Status: ' + result.status + '</p>';
+        if (result.evaluation) {
+            html += '<div style="margin-top:1rem;padding:1rem;background:#0a0a0f;border-radius:8px"><pre>' + result.evaluation + '</pre></div>';
         }
-        
-        html += '<p style="margin-top:1rem"><a href="' + EXPLORER + '" target="_blank">View on Explorer</a></p></div>';
-        
-        if (app.status === 'SUBMITTED') {
-            html += '<button class="btn btn-p" onclick="evaluateApp(\'' + appId + '\')" style="margin-top:1rem">Evaluate Application</button>';
-        }
-        if (app.status === 'APPROVED') {
-            html += '<button class="btn btn-s" onclick="releaseFunds(\'' + appId + '\')" style="margin-top:1rem;margin-left:.5rem">Release Funds</button>';
-        }
-        
-        resultEl.innerHTML = html;
-    } catch (e) {
-        note('Error: ' + e.message, 'err');
-    }
+        html += '</div>';
+        html += '<button class="btn btn-p" onclick="evaluateApp(\'' + appId + '\')" style="margin-top:1rem">Evaluate</button>';
+        html += '<button class="btn btn-s" onclick="releaseFunds(\'' + appId + '\')" style="margin-top:1rem;margin-left:.5rem">Release Funds</button>';
+        document.getElementById('status-result').innerHTML = html;
+    } catch (e) { note('Error: ' + e.message, 'err'); }
     loaded();
 }
 
 async function evaluateApp(appId) {
-    loading('Evaluating application... (1-3 min)');
+    loading('Evaluating... (1-3 min)');
     try {
-        var result = await sendTx('/api/applications/' + appId + '/evaluate', {});
-        note('Evaluation complete!', 'ok');
-        checkStatus();
-    } catch (e) {
-        note('Error: ' + e.message, 'err');
-    }
+        var tx = await contract.evaluate_application(appId);
+        note('Evaluation started! TX: ' + tx.hash, 'ok');
+    } catch (e) { note('Error: ' + e.message, 'err'); }
     loaded();
 }
 
 async function releaseFunds(appId) {
     loading('Releasing funds...');
     try {
-        var result = await sendTx('/api/applications/' + appId + '/release', {});
-        note('Funds released!', 'ok');
-        checkStatus();
-    } catch (e) {
-        note('Error: ' + e.message, 'err');
-    }
+        var tx = await contract.release_funds(appId);
+        note('Funds released! TX: ' + tx.hash, 'ok');
+    } catch (e) { note('Error: ' + e.message, 'err'); }
     loaded();
 }
 
 if (window.ethereum) {
     window.ethereum.on('accountsChanged', function(a) {
-        if (!a.length) {
-            acct = null;
-            document.getElementById('walletBtn').textContent = 'Connect Wallet';
-            document.getElementById('walletBtn').classList.remove('connected');
-        }
+        if (!a.length) { acct = null; provider = null; signer = null; contract = null; document.getElementById('walletBtn').textContent = 'Connect Wallet'; document.getElementById('walletBtn').classList.remove('connected'); }
     });
 }
 
 (async function() {
     if (window.ethereum) {
         try {
-            var a = await window.ethereum.request({ method: 'eth_accounts' });
-            if (a && a.length) {
-                acct = a[0];
-                var c = await window.ethereum.request({ method: 'eth_chainId' });
-                if (parseInt(c, 16) === CHAIN_ID) {
+            var ethers = window.ethers;
+            provider = new ethers.providers.Web3Provider(window.ethereum);
+            var accounts = await provider.listAccounts();
+            if (accounts && accounts.length) {
+                signer = provider.getSigner();
+                acct = await signer.getAddress();
+                var network = await provider.getNetwork();
+                if (network.chainId === CHAIN_ID) {
+                    contract = new ethers.Contract(CONTRACT, ABI, signer);
                     document.getElementById('walletBtn').textContent = '✓ ' + acct.slice(0,6) + '...' + acct.slice(-4);
                     document.getElementById('walletBtn').classList.add('connected');
+                    loadGrants();
                 }
             }
         } catch(e) {}
