@@ -71,8 +71,14 @@
     <div id="page-grants" class="page active">
         <h1>Available Grants</h1>
         <p class="subtitle">Click a grant to view details and apply</p>
+        <div class="grid" style="margin-bottom:1rem">
+            <div><label>Search by Grant ID</label><input type="text" id="search-grant-id" placeholder="test-grant-1"></div>
+        </div>
+        <div class="row" style="margin-bottom:1rem">
+            <button class="btn btn-p" onclick="searchGrant()">Search</button>
+            <button class="btn btn-s" onclick="refreshGrants()">Refresh Auto-Discovery</button>
+        </div>
         <div id="grants-list"><p style="color:#888">Loading grants...</p></div>
-        <button class="btn btn-s" onclick="refreshGrants()" style="margin-top:1rem">Refresh Grants</button>
     </div>
     <div id="page-detail" class="page"><div id="detail-content"></div></div>
     <div id="page-create" class="page">
@@ -114,15 +120,15 @@ const EXPLORER = 'https://explorer-studio-next.genlayer.com/address/' + CONTRACT
 
 // Pre-computed 4-byte selectors (keccak256)
 var SELECTORS = {
-    create_grant: '0x8d92fb02',
-    fund_grant: '0x5b9d5f19',
-    submit_application: '0xb2b150cc',
-    evaluate_application: '0x8d5220f2',
-    release_funds: '0x1dca6463',
-    cancel_grant: '0x3a48f6b6',
-    get_grant: '0x1214f76f',
-    get_application: '0x1afc2623',
-    get_stats: '0x76fee96c'
+    create_grant: '0xbb6d9da1',
+    fund_grant: '0x2a8939f0',
+    submit_application: '0xc1f9e3d9',
+    evaluate_application: '0xa49e961a',
+    release_funds: '0x283fa0e7',
+    cancel_grant: '0x8fd98e09',
+    get_grant: '0x91964600',
+    get_application: '0x279591b0',
+    get_stats: '0x61837e41'
 };
 
 var acct = null;
@@ -283,32 +289,57 @@ async function rateLimitedCall(method, args) {
 
 async function loadGrants() {
     var listEl = document.getElementById('grants-list');
-    listEl.innerHTML = '<p style="color:#888">Loading grants from chain...</p>';
+    listEl.innerHTML = '<p style="color:#888">Enter a grant ID above and click Search, or use Refresh to auto-discover grants.</p>';
+}
+
+async function searchGrant() {
+    var grantId = document.getElementById('search-grant-id').value.trim();
+    if (!grantId) { note('Enter a grant ID', 'warn'); return; }
+    if (!window.ethereum) { note('Connect wallet first!', 'err'); return; }
+    
+    loading('Searching for grant...');
+    try {
+        var result = await rateLimitedCall('get_grant', [grantId]);
+        var name = decodeString(result);
+        if (!name) {
+            document.getElementById('grants-list').innerHTML = '<p style="color:#888">Grant not found: ' + grantId + '</p>';
+        } else {
+            grants = [{ id: grantId, name: name }];
+            document.getElementById('grants-list').innerHTML = 
+                '<div class="card grant-card" onclick="viewGrant(\'' + grantId + '\')">' +
+                '<h3>' + name + '</h3>' +
+                '<div class="meta">ID: ' + grantId + ' · Click to view details and apply</div>' +
+                '</div>';
+        }
+    } catch (e) {
+        document.getElementById('grants-list').innerHTML = '<p style="color:#888">Grant not found: ' + grantId + '</p>';
+        note('Error: ' + e.message, 'err');
+    }
+    loaded();
+}
+
+function refreshGrants() {
+    localStorage.removeItem('grantguard_grants');
+    localStorage.removeItem('grantguard_grants_time');
+    grants = [];
+    
+    var listEl = document.getElementById('grants-list');
+    listEl.innerHTML = '<p style="color:#888">Auto-discovering grants... (this may take a moment)</p>';
     
     if (!window.ethereum) {
         listEl.innerHTML = '<p style="color:#888">Please connect wallet to view grants</p>';
         return;
     }
     
-    // Check cache first
-    var cached = localStorage.getItem('grantguard_grants');
-    var cacheTime = localStorage.getItem('grantguard_grants_time');
-    if (cached && cacheTime && (Date.now() - parseInt(cacheTime)) < 300000) {
-        try {
-            grants = JSON.parse(cached);
-            if (grants.length > 0) {
-                listEl.innerHTML = grants.map(function(g) {
-                    return '<div class="card grant-card" onclick="viewGrant(\'' + g.id + '\')">' +
-                        '<h3>' + g.name + '</h3>' +
-                        '<div class="meta">ID: ' + g.id + ' · Click to view</div>' +
-                    '</div>';
-                }).join('');
-                return;
-            }
-        } catch(e) {}
-    }
+    // Auto-discover with rate limiting
+    autoDiscoverGrants();
+}
+
+async function autoDiscoverGrants() {
+    var listEl = document.getElementById('grants-list');
     
     try {
+        // Get total count
         var statsResult = await rateLimitedCall('get_stats', []);
         var totalGrants = decodeUint(statsResult);
         
@@ -318,7 +349,11 @@ async function loadGrants() {
         }
         
         var found = [];
-        var grantIds = ['test-grant-1', 'test-grant-2', 'test-grant-3', 'grant_0', 'grant_1'];
+        var grantIds = [];
+        
+        // Common patterns
+        for (var i = 1; i <= 5; i++) grantIds.push('test-grant-' + i);
+        for (var i = 0; i < 5; i++) grantIds.push('grant_' + i);
         
         for (var i = 0; i < grantIds.length; i++) {
             try {
@@ -335,7 +370,7 @@ async function loadGrants() {
         localStorage.setItem('grantguard_grants_time', Date.now().toString());
         
         if (grants.length === 0) {
-            listEl.innerHTML = '<p style="color:#888">No grants found. Create the first one!</p>';
+            listEl.innerHTML = '<p style="color:#888">No grants found. Try searching by exact grant ID.</p>';
         } else {
             listEl.innerHTML = grants.map(function(g) {
                 return '<div class="card grant-card" onclick="viewGrant(\'' + g.id + '\')">' +
@@ -345,14 +380,8 @@ async function loadGrants() {
             }).join('');
         }
     } catch (e) {
-        listEl.innerHTML = '<p style="color:#888">Error loading grants: ' + e.message + '</p>';
+        listEl.innerHTML = '<p style="color:#888">Error: ' + e.message + '. Try searching by exact grant ID.</p>';
     }
-}
-
-function refreshGrants() {
-    localStorage.removeItem('grantguard_grants');
-    localStorage.removeItem('grantguard_grants_time');
-    loadGrants();
 }
 
 function viewGrant(id) {
