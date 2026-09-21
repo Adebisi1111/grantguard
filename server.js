@@ -1,21 +1,18 @@
 const express = require('express');
 const cors = require('cors');
-const { abi } = require('genlayer-js');
+const { abi, createClient, chains } = require('genlayer-js');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const CONTRACT = '0x671990450Bab8f89144F50B6A619c6382E824172';
-const CONSENSUS_CONTRACT = '0x0112Bf6e83497965A5fdD6Dad1E447a6E004271d';
+const CONSENSUS_CONTRACT = '0xb7278A61aa25c888815aFC32Ad3cC52fF24fE575';
 
-// GenLayer-compatible encoding
-function encodeCalldata(functionName, args) {
-    const calldataObj = abi.calldata.makeCalldataObject(functionName, args, undefined);
-    const encoded = abi.calldata.encode(calldataObj);
-    const serialized = abi.transactions.serialize([encoded, false]);
-    return serialized;
-}
+// Create GenLayer client
+const client = createClient({
+    chain: chains.studioDevnet
+});
 
 // RPC helper
 async function rpc(method, params) {
@@ -27,6 +24,14 @@ async function rpc(method, params) {
     const j = await r.json();
     if (j.error) throw new Error(j.error.message);
     return j.result;
+}
+
+// GenLayer SDK encoding - produces consensus-aware calldata
+function encodeCalldata(functionName, args) {
+    const calldataObj = abi.calldata.makeCalldataObject(functionName, args, undefined);
+    const encoded = abi.calldata.encode(calldataObj);
+    const serialized = abi.transactions.serialize([encoded, false]);
+    return serialized;
 }
 
 // Health check
@@ -46,6 +51,10 @@ app.get('/api/consensus', (req, res) => {
 app.post('/api/encode', (req, res) => {
     try {
         const { method, args } = req.body;
+        if (!method || !args) {
+            return res.status(400).json({ error: 'method and args required' });
+        }
+        
         const data = encodeCalldata(method, args);
         res.json({ data, to: CONSENSUS_CONTRACT });
     } catch (e) {
@@ -53,23 +62,16 @@ app.post('/api/encode', (req, res) => {
     }
 });
 
-// Read via eth_call
-app.post('/api/read', async (req, res) => {
-    try {
-        const { method, args } = req.body;
-        const data = encodeCalldata(method, args);
-        const result = await rpc('eth_call', [{ to: CONTRACT, data }, 'latest']);
-        res.json({ result });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-// Simulate write
+// Simulate a write operation
 app.post('/api/simulate', async (req, res) => {
     try {
         const { method, args, from } = req.body;
+        if (!method || !args) {
+            return res.status(400).json({ error: 'method and args required' });
+        }
+        
         const data = encodeCalldata(method, args);
+        
         const result = await rpc('gen_call', [{
             type: 'write',
             to: CONTRACT,
@@ -77,27 +79,24 @@ app.post('/api/simulate', async (req, res) => {
             data,
             transaction_hash_variant: 'latest-nonfinal'
         }]);
+        
+        res.json({ success: true, result });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+// Read via eth_call
+app.post('/api/read', async (req, res) => {
+    try {
+        const { method, args } = req.body;
+        if (!method || !args) {
+            return res.status(400).json({ error: 'method and args required' });
+        }
+        
+        const data = encodeCalldata(method, args);
+        const result = await rpc('eth_call', [{ to: CONTRACT, data }, 'latest']);
         res.json({ result });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-// Get transaction count (nonce)
-app.get('/api/nonce/:address', async (req, res) => {
-    try {
-        const result = await rpc('eth_getTransactionCount', [req.params.address, 'latest']);
-        res.json({ nonce: result });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
-// Get gas price
-app.get('/api/gasPrice', async (req, res) => {
-    try {
-        const result = await rpc('eth_gasPrice', []);
-        res.json({ gasPrice: result });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
