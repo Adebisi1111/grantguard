@@ -149,8 +149,9 @@ async function toggleWallet() {
     }
     if (!window.ethereum) { note('MetaMask not detected!', 'err'); return; }
     try {
-        var ethers = window.ethers;
-        provider = new ethers.providers.Web3Provider(window.ethereum);
+        // Wait for ethers to load
+        await waitForEthers();
+        provider = new window.ethers.providers.Web3Provider(window.ethereum);
         await provider.send("eth_requestAccounts", []);
         signer = provider.getSigner();
         acct = await signer.getAddress();
@@ -158,15 +159,31 @@ async function toggleWallet() {
         if (network.chainId !== CHAIN_ID) {
             try { await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [{ chainId: CHAIN_HEX, chainName: 'GenLayer Studio Next', rpcUrls: [RPC], nativeCurrency: { name: 'GEN', symbol: 'GEN', decimals: 18 } }] }); } catch(e) {}
             await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAIN_HEX }] });
-            provider = new ethers.providers.Web3Provider(window.ethereum);
+            provider = new window.ethers.providers.Web3Provider(window.ethereum);
             signer = provider.getSigner();
         }
-        contract = new ethers.Contract(CONTRACT, ABI, signer);
+        contract = new window.ethers.Contract(CONTRACT, ABI, signer);
         document.getElementById('walletBtn').textContent = '✓ ' + acct.slice(0,6) + '...' + acct.slice(-4);
         document.getElementById('walletBtn').classList.add('connected');
         note('Wallet connected!', 'ok');
         loadGrants();
     } catch (e) { note('Error: ' + e.message, 'err'); }
+}
+
+function waitForEthers() {
+    return new Promise(function(resolve, reject) {
+        var attempts = 0;
+        var interval = setInterval(function() {
+            attempts++;
+            if (window.ethers && window.ethers.providers) {
+                clearInterval(interval);
+                resolve();
+            } else if (attempts > 50) {
+                clearInterval(interval);
+                reject(new Error('ethers.js failed to load'));
+            }
+        }, 100);
+    });
 }
 
 async function loadGrants() {
@@ -294,15 +311,15 @@ if (window.ethereum) {
 (async function() {
     if (window.ethereum) {
         try {
-            var ethers = window.ethers;
-            provider = new ethers.providers.Web3Provider(window.ethereum);
+            await waitForEthers();
+            provider = new window.ethers.providers.Web3Provider(window.ethereum);
             var accounts = await provider.listAccounts();
             if (accounts && accounts.length) {
                 signer = provider.getSigner();
                 acct = await signer.getAddress();
                 var network = await provider.getNetwork();
                 if (network.chainId === CHAIN_ID) {
-                    contract = new ethers.Contract(CONTRACT, ABI, signer);
+                    contract = new window.ethers.Contract(CONTRACT, ABI, signer);
                     document.getElementById('walletBtn').textContent = '✓ ' + acct.slice(0,6) + '...' + acct.slice(-4);
                     document.getElementById('walletBtn').classList.add('connected');
                     loadGrants();
