@@ -12,8 +12,8 @@ Grant evaluation platform with **source-grounded evaluation**, **on-chain eviden
 
 | Concern | Fix |
 |---------|-----|
-| Evaluation ignores stored grant rules | Prompt reads `eligibility`, `criteria`, `budget_rules`, `required_evidence` from contract storage and checks each against the application |
-| No evidence verification | Validators fetch evidence URLs via `gl.nondet.web.render()` on-chain before scoring |
+| Evaluation ignores stored grant rules | Prompt reads `eligibility`, `criteria`, `budget_rules`, `required_evidence` from contract storage |
+| No evidence verification | Validators fetch evidence URLs via `gl.nondet.web.render()` on-chain |
 | No escrow/payout | `fund_grant()` (payable) → `release_funds()` → `gl.pay()` transfers actual GEN |
 | Unsafe fallback | Consensus failure → FAIL (not auto-PASS) |
 
@@ -25,49 +25,61 @@ Grant evaluation platform with **source-grounded evaluation**, **on-chain eviden
 3. Open https://adebisi1111.github.io/grantguard/
 4. Click **Connect Wallet** in top-right
 
-### Step 1: Lookup Existing Grant
-Go to **Grants** tab:
-- Enter Grant ID: `test-grant-1`
-- Click **View Grant**
-- Grant details should appear
+### Step 1: Create Grant
+Go to **Create Grant** tab:
 
-### Step 2: Apply for the Grant
-On the grant detail page, fill in the application form:
+| Field | Value |
+|-------|-------|
+| Grant ID | `defi-grant-1` |
+| Grant Name | `DeFi Innovation Grant` |
+| Description | `Supporting DeFi projects` |
+| Eligibility Criteria | `Open to all developers` |
+| Evaluation Criteria | `Technical merit and innovation` |
+| Budget Rules | `Max 10000 GEN per project` |
+| Required Evidence | `GitHub repo with working demo` |
+| Deadline | `2026-12-31` |
+
+Click **Publish Grant** → sign in MetaMask
+
+### Step 2: View Grants
+Go to **Grants** tab → grants should appear automatically (searches test-grant-1, test-grant-2, grant_0, grant_1, etc.)
+
+### Step 3: Fund Grant
+Click on your grant → click **Fund Grant** → enter `1000000000000000000` (1 GEN) → sign
+
+### Step 4: Submit Application
+From grant detail page:
 
 | Field | Value |
 |-------|-------|
 | Project Name | `DeFi Analytics Dashboard` |
 | Requested Amount (wei) | `500000000000000000` (0.5 GEN) |
-| Project Description | `A comprehensive DeFi analytics dashboard` |
-| Team Information | `Team of 3 developers` |
+| Project Description | `A comprehensive DeFi analytics dashboard with real-time data` |
+| Team Information | `Team of 3 senior developers` |
 | Website | `https://defi-dashboard.example.com` |
 | GitHub URL | `https://github.com/ethereum/ethereum-org-website` |
 | Evidence URLs | `https://github.com/ethereum/ethereum-org-website` |
-| Additional Info | `Built with React` |
+| Additional Info | `Built with React and TypeScript` |
 
-Click **Submit Application** → sign in MetaMask
+Click **Submit Application** → sign → note the App ID (app_0)
 
-### Step 3: Check Status
-Go to **Check Status** tab:
-- Enter App ID: `app_0`
-- Click **Check Status**
+### Step 5: Check Status
+Go to **Check Status** tab → enter `app_0` → click **Check Status**
 
 Should show: `Status: SUBMITTED`
 
-### Step 4: Evaluate Application
-Click **Evaluate Application** button → sign in MetaMask
+### Step 6: Evaluate Application
+Click **Evaluate Application** button → sign in MetaMask → wait 1-3 minutes
 
-**Wait 1-3 minutes.** Validators:
-1. Fetch evidence URL (`https://github.com/ethereum/ethereum-org-website`)
-2. Compare against stored criteria ("Technical merit and innovation")
-3. Reach consensus via `prompt_comparative`
-
-### Step 5: Check Evaluation Result
-After evaluation, check status again:
+### Step 7: Check Evaluation Result
+Check status again:
 - Status: **REJECTED** (evidence doesn't match project description)
-- Evaluation: `{eligibility: "PASS", criteria: "FAIL", budget: "PASS", evidence: "FAIL", final: "FAIL", reasons: [...]}`
+- Evaluation shows reasons like "The provided GitHub repository is for the official ethereum.org website, not a unique DeFi Analytics Dashboard"
 
-### Expected Results
+### Step 8: Release Funds (if APPROVED)
+If status is APPROVED, click **Release Funds** → sign
+
+## Expected Results
 
 | Test | GitHub URL | Project | Result |
 |------|------------|---------|--------|
@@ -88,21 +100,13 @@ After evaluation, check status again:
 | `get_application` | view | Read application details |
 | `get_stats` | view | Platform statistics |
 
-## Architecture
-
-```
-Frontend (GitHub Pages) → MetaMask → GenLayer Studio Next
-    ↕
-Contract: 0x671990450Bab8f89144F50B6A619c6382E824172
-```
-
 ## Files
 
 ```
 grantguard/
-├── index.html          # Frontend (GitHub Pages)
-├── server.js           # Backend relay (Render)
-├── package.json        # Dependencies (genlayer-js v2.0.0-rc.1)
+├── index.html          # Frontend (GitHub Pages) - MetaMask direct
+├── server.js           # Backend relay (Render) - optional
+├── package.json        # Dependencies
 ├── fee-profile.json    # Fee config for Studio Next
 ├── README.md           # This file
 └── contracts/
