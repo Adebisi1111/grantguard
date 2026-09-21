@@ -28,6 +28,7 @@
         .row { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1rem; }
         .btn { border: 1px solid #15BCDF; color: #15BCDF; background: transparent; padding: .6rem 1.2rem; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: .85rem; }
         .btn:hover { background: #15BCDF; color: #fff; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-p { background: #15BCDF; color: #fff; }
         .btn-s { border-color: #52e0a1; color: #52e0a1; }
         .btn-d { border-color: #ff5c7a; color: #ff5c7a; }
@@ -78,7 +79,7 @@
             <div><label>Evaluation Criteria *</label><textarea id="grant-criteria" required></textarea></div>
             <div><label>Budget Rules</label><textarea id="grant-budget"></textarea></div>
             <div><label>Required Evidence</label><textarea id="grant-evidence"></textarea></div>
-            <button type="submit" class="btn btn-p">Publish Grant</button>
+            <button type="submit" class="btn btn-p" id="btn-create">Publish Grant</button>
         </form>
         <div id="create-result" style="margin-top:1rem"></div>
     </div>
@@ -115,6 +116,7 @@ const ABI = [
 
 var contract = null;
 var acct = null;
+var isProcessing = false;
 
 function note(msg, type) {
     var el = document.getElementById('note');
@@ -137,9 +139,9 @@ function go(page) {
 }
 
 async function toggleWallet() {
+    if (isProcessing) return;
     if (acct) {
-        acct = null;
-        contract = null;
+        acct = null; contract = null;
         document.getElementById('walletBtn').textContent = 'Connect Wallet';
         document.getElementById('walletBtn').classList.remove('connected');
         document.getElementById('grants-list').innerHTML = '<p style="color:#888">Connect wallet to view grants</p>';
@@ -147,6 +149,7 @@ async function toggleWallet() {
     }
     if (!window.ethereum) { note('MetaMask not detected!', 'err'); return; }
     if (typeof ethers === 'undefined') { note('Ethers.js not loaded!', 'err'); return; }
+    isProcessing = true;
     try {
         var provider = new ethers.providers.Web3Provider(window.ethereum);
         await provider.send("eth_requestAccounts", []);
@@ -158,6 +161,7 @@ async function toggleWallet() {
         note('Connected!', 'ok');
         loadGrants();
     } catch (e) { note('Error: ' + e.message, 'err'); }
+    isProcessing = false;
 }
 
 async function loadGrants() {
@@ -191,31 +195,42 @@ function viewGrant(id) {
         '<form id="apply-form"><input type="text" id="app-name" placeholder="Project Name" required><br><br><textarea id="app-description" placeholder="Description" required></textarea><br><br><input type="text" id="app-amount" placeholder="Amount in wei"><br><br><input type="text" id="app-github" placeholder="GitHub URL"><br><br><input type="text" id="app-evidence" placeholder="Evidence URLs"><br><br><button type="submit" class="btn btn-p">Submit</button></form><div id="apply-result"></div>';
     document.getElementById('apply-form').onsubmit = async function(e) {
         e.preventDefault();
+        if (isProcessing) return;
+        isProcessing = true;
         loading('Submitting...');
         try {
             var tx = await contract.submit_application(id, document.getElementById('app-name').value, document.getElementById('app-description').value, '', document.getElementById('app-amount').value || '0', '', document.getElementById('app-github').value, document.getElementById('app-evidence').value, '');
             document.getElementById('apply-result').innerHTML = '<div class="note show ok">TX: ' + tx.hash + '</div>';
         } catch (e) { note('Error: ' + e.message, 'err'); }
+        isProcessing = false;
         loaded();
     };
 }
 
 async function fundGrant(id) {
+    if (isProcessing) return;
+    isProcessing = true;
     loading('Funding...');
     try {
         var tx = await contract.fund_grant(id, { value: '1000000000000000000' });
         document.getElementById('fund-result').innerHTML = '<div class="note show ok">TX: ' + tx.hash + '</div>';
     } catch (e) { note('Error: ' + e.message, 'err'); }
+    isProcessing = false;
     loaded();
 }
 
 document.getElementById('create-form').onsubmit = async function(e) {
     e.preventDefault();
+    if (isProcessing) return;
+    isProcessing = true;
+    document.getElementById('btn-create').disabled = true;
     loading('Publishing...');
     try {
         var tx = await contract.create_grant(document.getElementById('grant-id').value, document.getElementById('grant-name').value, document.getElementById('grant-description').value, document.getElementById('grant-eligibility').value, document.getElementById('grant-criteria').value, document.getElementById('grant-budget').value, document.getElementById('grant-evidence').value, document.getElementById('grant-deadline').value);
         document.getElementById('create-result').innerHTML = '<div class="note show ok">TX: ' + tx.hash + '</div>';
     } catch (e) { note('Error: ' + e.message, 'err'); }
+    document.getElementById('btn-create').disabled = false;
+    isProcessing = false;
     loaded();
 };
 
@@ -231,11 +246,14 @@ async function checkStatus() {
 }
 
 async function evaluateApp(appId) {
+    if (isProcessing) return;
+    isProcessing = true;
     loading('Evaluating...');
     try {
         var tx = await contract.evaluate_application(appId);
         note('Started! TX: ' + tx.hash, 'ok');
     } catch (e) { note('Error: ' + e.message, 'err'); }
+    isProcessing = false;
     loaded();
 }
 
