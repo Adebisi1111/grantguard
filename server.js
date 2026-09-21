@@ -1,219 +1,162 @@
-// GrantGuard v2 Backend - Studio Next
+// GrantGuard v2 Backend - Uses GenLayer SDK for proper encoding
 const express = require('express');
 const cors = require('cors');
-const { createClient } = require('genlayer-js');
-const { privateKeyToAccount } = require('viem/accounts');
+const { createClient, createAccount, chains } = require('genlayer-js');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const CONTRACT = process.env.CONTRACT_ADDRESS || '0x671990450Bab8f89144F50B6A619c6382E824172';
-const PK = process.env.PRIVATE_KEY || '';
+const CONTRACT = '0x671990450Bab8f89144F50B6A619c6382E824172';
+const PK = process.env.PRIVATE_KEY || '0x023d7e4e950d8cea0d8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8';
 
-// Studio Next chain config
-const studioNext = {
-  id: 61997,
-  name: 'Studio Next',
-  rpcUrls: { default: { http: ['https://studio-next.genlayer.com/api'] } },
-  nativeCurrency: { name: 'GEN', symbol: 'GEN', decimals: 18 },
-  testnet: true,
-  consensusMainContract: { address: '0x0112Bf6e83497965A5fdD6Dad1E447a6E004271D', abi: [] },
-  defaultNumberOfInitialValidators: 5,
-  defaultConsensusMaxRotations: 3,
-};
-
-const account = PK ? privateKeyToAccount(PK) : null;
-const client = account
-  ? createClient({ chain: studioNext, account })
-  : createClient({ chain: studioNext });
-
-const GAS_LIMIT = 5000000n;
-
-async function read(functionName, args = []) {
-  return client.readContract({ address: CONTRACT, functionName, args });
-}
-
-async function write(functionName, args, value) {
-  return client.writeContract({ address: CONTRACT, functionName, args, gasLimit: GAS_LIMIT, value });
-}
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', contract: CONTRACT, has_private_key: !!PK });
+// Create GenLayer client
+const account = createAccount(PK);
+const client = createClient({
+    chain: chains.studioDevnet,
+    account: account
 });
 
-app.get('/healthz', (req, res) => res.send('ok'));
+// ABI matching the contract schema
+const ABI = [
+    { name: 'create_grant', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'grant_id', type: 'string' }, { name: 'name', type: 'string' }, { name: 'description', type: 'string' }, { name: 'eligibility', type: 'string' }, { name: 'criteria', type: 'string' }, { name: 'budget_rules', type: 'string' }, { name: 'required_evidence', type: 'string' }, { name: 'deadline', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'fund_grant', type: 'function', stateMutability: 'payable', inputs: [{ name: 'grant_id', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'submit_application', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'grant_id', type: 'string' }, { name: 'project_name', type: 'string' }, { name: 'project_description', type: 'string' }, { name: 'team_info', type: 'string' }, { name: 'requested_amount', type: 'uint256' }, { name: 'website', type: 'string' }, { name: 'github_url', type: 'string' }, { name: 'evidence_urls', type: 'string' }, { name: 'additional_info', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'evaluate_application', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'app_id', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'release_funds', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'app_id', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'cancel_grant', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'grant_id', type: 'string' }], outputs: [{ type: 'bool' }] },
+    { name: 'get_grant', type: 'function', stateMutability: 'view', inputs: [{ name: 'grant_id', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'get_application', type: 'function', stateMutability: 'view', inputs: [{ name: 'app_id', type: 'string' }], outputs: [{ type: 'string' }] },
+    { name: 'get_stats', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] }
+];
 
-// Get grant by ID - returns decoded data
+// Health check
+app.get('/api/health', async (req, res) => {
+    try {
+        const schema = await client.readContract({
+            address: CONTRACT,
+            abi: ABI,
+            functionName: 'get_stats',
+            args: []
+        });
+        res.json({ status: 'ok', contract: CONTRACT, account: account.address, stats: schema });
+    } catch (e) {
+        res.json({ status: 'ok', contract: CONTRACT, account: account.address, error: e.message });
+    }
+});
+
+// Read grant
 app.get('/api/grants/:id', async (req, res) => {
-  try {
-    const grant = await read('get_grant', [req.params.id]);
-    if (!grant || !grant.id) {
-      return res.status(404).json({ detail: 'Grant not found' });
+    try {
+        const result = await client.readContract({
+            address: CONTRACT,
+            abi: ABI,
+            functionName: 'get_grant',
+            args: [req.params.id]
+        });
+        res.json({ id: req.params.id, data: result });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
-    res.json({
-      id: grant.id,
-      name: grant.name,
-      description: grant.description,
-      eligibility: grant.eligibility,
-      criteria: grant.criteria,
-      budget_rules: grant.budget_rules,
-      required_evidence: grant.required_evidence,
-      deadline: grant.deadline,
-      active: grant.active,
-      funded_amount: grant.funded_amount?.toString() || '0',
-      paid_out: grant.paid_out?.toString() || '0',
-      creator: grant.creator,
-    });
-  } catch (err) {
-    res.status(500).json({ detail: err.message });
-  }
 });
 
-// Get application by ID - returns decoded data
+// Read application
 app.get('/api/applications/:id', async (req, res) => {
-  try {
-    const app = await read('get_application', [req.params.id]);
-    if (!app || !app.id) {
-      return res.status(404).json({ detail: 'Application not found' });
+    try {
+        const result = await client.readContract({
+            address: CONTRACT,
+            abi: ABI,
+            functionName: 'get_application',
+            args: [req.params.id]
+        });
+        res.json({ id: req.params.id, data: result });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
-    res.json({
-      id: app.id,
-      grant_id: app.grant_id,
-      project_name: app.project_name,
-      project_description: app.project_description,
-      team_info: app.team_info,
-      requested_amount: app.requested_amount?.toString() || '0',
-      website: app.website,
-      github_url: app.github_url,
-      evidence_urls: app.evidence_urls,
-      additional_info: app.additional_info,
-      status: app.status,
-      evaluation: app.evaluation,
-    });
-  } catch (err) {
-    res.status(500).json({ detail: err.message });
-  }
-});
-
-// Get stats
-app.get('/api/stats', async (req, res) => {
-  try {
-    const stats = await read('get_stats', []);
-    res.json({
-      total_grants: stats.total_grants?.toString() || '0',
-      total_applications: stats.total_applications?.toString() || '0',
-    });
-  } catch (err) {
-    res.status(500).json({ detail: err.message });
-  }
 });
 
 // Create grant
 app.post('/api/grants', async (req, res) => {
-  try {
-    const { grant_id, name, description, eligibility, criteria, budget_rules, required_evidence, deadline } = req.body;
-    if (!grant_id || !name || !description || !criteria) {
-      return res.status(400).json({ detail: 'grant_id, name, description, criteria required' });
+    try {
+        const { grant_id, name, description, eligibility, criteria, budget_rules, required_evidence, deadline } = req.body;
+        const hash = await client.writeContract({
+            address: CONTRACT,
+            abi: ABI,
+            functionName: 'create_grant',
+            args: [grant_id, name, description, eligibility, criteria, budget_rules, required_evidence, deadline]
+        });
+        res.json({ tx_hash: hash, grant_id });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
-    if (!PK) return res.status(500).json({ detail: 'PRIVATE_KEY not set' });
-
-    const txHash = await write('create_grant', [
-      grant_id, name, description, eligibility || '', criteria,
-      budget_rules || '', required_evidence || '', deadline || ''
-    ]);
-
-    res.json({ status: 'success', tx_hash: txHash, grant_id: grant_id });
-  } catch (err) {
-    console.error('create_grant error:', err);
-    res.status(500).json({ detail: err.message });
-  }
 });
 
-// Fund grant (payable)
+// Fund grant
 app.post('/api/grants/:id/fund', async (req, res) => {
-  try {
-    if (!PK) return res.status(500).json({ detail: 'PRIVATE_KEY not set' });
-    const value = BigInt(req.body.value || '0');
-    const txHash = await write('fund_grant', [req.params.id], value);
-    res.json({ status: 'success', tx_hash: txHash });
-  } catch (err) {
-    console.error('fund_grant error:', err);
-    res.status(500).json({ detail: err.message });
-  }
+    try {
+        const { value } = req.body;
+        const hash = await client.writeContract({
+            address: CONTRACT,
+            abi: ABI,
+            functionName: 'fund_grant',
+            args: [req.params.id],
+            value: BigInt(value)
+        });
+        res.json({ tx_hash: hash });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 // Submit application
 app.post('/api/applications', async (req, res) => {
-  try {
-    const { grant_id, project_name, project_description, team_info, requested_amount, website, github_url, evidence_urls, additional_info } = req.body;
-    if (!grant_id || !project_name || !project_description) {
-      return res.status(400).json({ detail: 'grant_id, project_name, project_description required' });
+    try {
+        const { grant_id, project_name, project_description, team_info, requested_amount, website, github_url, evidence_urls, additional_info } = req.body;
+        const hash = await client.writeContract({
+            address: CONTRACT,
+            abi: ABI,
+            functionName: 'submit_application',
+            args: [grant_id, project_name, project_description, team_info, BigInt(requested_amount), website, github_url, evidence_urls, additional_info]
+        });
+        res.json({ tx_hash: hash });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
-    if (!PK) return res.status(500).json({ detail: 'PRIVATE_KEY not set' });
-
-    const txHash = await write('submit_application', [
-      grant_id, project_name, project_description, team_info || '',
-      BigInt(requested_amount || '0'), website || '', github_url || '',
-      evidence_urls || '', additional_info || ''
-    ]);
-
-    const stats = await read('get_stats');
-    const appId = `app_${Number(stats.total_applications) - 1}`;
-
-    res.json({ status: 'success', tx_hash: txHash, app_id: appId });
-  } catch (err) {
-    console.error('submit_application error:', err);
-    res.status(500).json({ detail: err.message });
-  }
 });
 
 // Evaluate application
 app.post('/api/applications/:id/evaluate', async (req, res) => {
-  try {
-    if (!PK) return res.status(500).json({ detail: 'PRIVATE_KEY not set' });
-    const raw = await write('evaluate_application', [req.params.id], 0n);
-    
-    let evaluation;
     try {
-      evaluation = JSON.parse(raw);
+        const hash = await client.writeContract({
+            address: CONTRACT,
+            abi: ABI,
+            functionName: 'evaluate_application',
+            args: [req.params.id]
+        });
+        res.json({ tx_hash: hash });
     } catch (e) {
-      evaluation = { result: raw };
+        res.status(500).json({ error: e.message });
     }
-    
-    res.json({ status: 'success', evaluation });
-  } catch (err) {
-    console.error('evaluate_application error:', err);
-    res.status(500).json({ detail: err.message });
-  }
 });
 
 // Release funds
 app.post('/api/applications/:id/release', async (req, res) => {
-  try {
-    if (!PK) return res.status(500).json({ detail: 'PRIVATE_KEY not set' });
-    const raw = await write('release_funds', [req.params.id], 0n);
-    res.json({ status: 'success', result: raw });
-  } catch (err) {
-    console.error('release_funds error:', err);
-    res.status(500).json({ detail: err.message });
-  }
+    try {
+        const hash = await client.writeContract({
+            address: CONTRACT,
+            abi: ABI,
+            functionName: 'release_funds',
+            args: [req.params.id]
+        });
+        res.json({ tx_hash: hash });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
-// Cancel grant
-app.post('/api/grants/:id/cancel', async (req, res) => {
-  try {
-    if (!PK) return res.status(500).json({ detail: 'PRIVATE_KEY not set' });
-    const txHash = await write('cancel_grant', [req.params.id], 0n);
-    res.json({ status: 'success', tx_hash: txHash });
-  } catch (err) {
-    console.error('cancel_grant error:', err);
-    res.status(500).json({ detail: err.message });
-  }
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`GrantGuard v2 API on port ${PORT}`);
+    console.log(`Account: ${account.address}`);
+    console.log(`Contract: ${CONTRACT}`);
 });
-
-// Serve static files
-app.use(express.static('.'));
-
-const PORT = process.env.PORT || 8000;
-app.listen(PORT, () => console.log(`GrantGuard v2 API on port ${PORT}`));
