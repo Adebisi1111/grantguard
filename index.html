@@ -104,7 +104,6 @@
 </div>
 
 <script>
-const API = 'https://grantguard-56ax.onrender.com';
 const CONTRACT = '0x671990450Bab8f89144F50B6A619c6382E824172';
 const CHAIN_ID = 61997;
 const CHAIN_HEX = '0x107d';
@@ -155,52 +154,137 @@ async function toggleWallet() {
         document.getElementById('walletBtn').textContent = '✓ ' + acct.slice(0,6) + '...' + acct.slice(-4);
         document.getElementById('walletBtn').classList.add('connected');
         note('Wallet connected!', 'ok');
+        loadGrants();
     } catch (e) {
         note('Error: ' + e.message, 'err');
     }
 }
 
-async function sendTx(endpoint, body) {
+async function ethCall(method, args) {
+    var selector = getSelector(method);
+    var data = selector + encodeArgs(args, method);
+    return await window.ethereum.request({ method: 'eth_call', params: [{ to: CONTRACT, data: data }, 'latest'] });
+}
+
+async function sendTx(method, args, value) {
     if (!acct) { note('Connect wallet first!', 'err'); throw new Error('No wallet'); }
-    var response = await fetch(API + endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-    });
-    if (!response.ok) {
-        var err = await response.json();
-        throw new Error(err.detail || 'Transaction failed');
+    var selector = getSelector(method);
+    var data = selector + encodeArgs(args, method);
+    return await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: acct, to: CONTRACT, data: data, value: value ? '0x' + value.toString(16) : '0x0' }] });
+}
+
+function getSelector(method) {
+    var selectors = {
+        create_grant: '0xbb6d9da1',
+        fund_grant: '0x2a8939f0',
+        submit_application: '0xc1f9e3d9',
+        evaluate_application: '0xa49e961a',
+        release_funds: '0x283fa0e7',
+        cancel_grant: '0x8fd98e09',
+        get_grant: '0x91964600',
+        get_application: '0x279591b0',
+        get_stats: '0x61837e41'
+    };
+    return selectors[method] || '0x00000000';
+}
+
+function encodeArgs(args, method) {
+    var types = {
+        create_grant: ['string','string','string','string','string','string','string','string'],
+        fund_grant: ['string'],
+        submit_application: ['string','string','string','string','uint256','string','string','string','string'],
+        evaluate_application: ['string'],
+        release_funds: ['string'],
+        cancel_grant: ['string'],
+        get_grant: ['string'],
+        get_application: ['string'],
+        get_stats: []
+    };
+    var methodTypes = types[method] || [];
+    
+    var result = '';
+    var dynamicOffset = methodTypes.length * 64;
+    var dynamicData = '';
+    
+    for (var i = 0; i < args.length; i++) {
+        var arg = args[i];
+        var type = methodTypes[i] || 'string';
+        
+        if (type === 'string') {
+            var hex = stringToHex(arg);
+            result += toHex(dynamicOffset, 64);
+            dynamicData += toHex(hex.length / 2, 64);
+            dynamicData += hex.padEnd(Math.ceil(hex.length / 64) * 64, '0');
+            dynamicOffset += 64 + Math.ceil(hex.length / 64) * 64;
+        } else if (type === 'uint256') {
+            result += toHex(BigInt(arg || 0), 64);
+        } else if (type === 'bool') {
+            result += arg ? '01' : '00';
+        }
     }
-    return response.json();
+    return result + dynamicData;
+}
+
+function stringToHex(str) {
+    var hex = '';
+    for (var i = 0; i < str.length; i++) {
+        hex += str.charCodeAt(i).toString(16).padStart(2, '0');
+    }
+    return hex;
+}
+
+function toHex(num, length) {
+    var hex = num.toString(16);
+    while (hex.length < length) hex = '0' + hex;
+    return hex;
+}
+
+function decodeString(hex) {
+    if (!hex || hex === '0x' || hex.length < 128) return '';
+    try {
+        hex = hex.startsWith('0x') ? hex.slice(2) : hex;
+        var offset = parseInt(hex.slice(64, 128), 16) * 2;
+        var length = parseInt(hex.slice(offset, offset + 64), 16) * 2;
+        var strHex = hex.slice(offset + 64, offset + 64 + length);
+        var str = '';
+        for (var i = 0; i < strHex.length; i += 2) {
+            str += String.fromCharCode(parseInt(strHex.slice(i, i+2), 16));
+        }
+        return str;
+    } catch(e) { return ''; }
+}
+
+function decodeUint(hex) {
+    if (!hex || hex === '0x') return 0;
+    try { return parseInt(hex.startsWith('0x') ? hex.slice(2, 66) : hex.slice(0, 64), 16); } catch(e) { return 0; }
 }
 
 async function loadGrants() {
     var listEl = document.getElementById('grants-list');
     listEl.innerHTML = '<p style="color:#888">Loading grants...</p>';
     
+    if (!window.ethereum) {
+        listEl.innerHTML = '<p style="color:#888">Please connect wallet to view grants</p>';
+        return;
+    }
+    
     try {
-        // Get stats from backend
-        var stats = await fetch(API + '/api/stats').then(r => r.json());
-        var totalGrants = parseInt(stats.total_grants);
+        var statsResult = await ethCall('get_stats', []);
+        var totalGrants = decodeUint(statsResult);
         
         if (totalGrants === 0) {
             listEl.innerHTML = '<p style="color:#888">No grants found. Create the first one!</p>';
             return;
         }
         
-        // Try to fetch grants by common IDs
         var found = [];
-        var idsToTry = ['test-grant-1', 'test-grant-2', 'test-grant-3', 'grant_0', 'grant_1', 'grant_2'];
+        var grantIds = ['test-grant-1', 'test-grant-2', 'test-grant-3', 'grant_0', 'grant_1', 'grant_2'];
         
-        for (var i = 0; i < idsToTry.length; i++) {
+        for (var i = 0; i < grantIds.length; i++) {
             try {
-                var response = await fetch(API + '/api/grants/' + encodeURIComponent(idsToTry[i]));
-                if (response.ok) {
-                    var grant = await response.json();
-                    if (grant && grant.id) {
-                        found.push({ id: grant.id, name: grant.name });
-                    }
-                }
+                var result = await ethCall('get_grant', [grantIds[i]]);
+                var name = decodeString(result);
+                if (name) found.push({ id: grantIds[i], name: name });
             } catch(e) {}
         }
         
@@ -217,7 +301,7 @@ async function loadGrants() {
             }).join('');
         }
     } catch (e) {
-        listEl.innerHTML = '<p style="color:#888">Error: ' + e.message + '</p>';
+        listEl.innerHTML = '<p style="color:#888">Error loading grants: ' + e.message + '</p>';
     }
 }
 
@@ -254,18 +338,18 @@ function viewGrant(id) {
         e.preventDefault();
         loading('Submitting application...');
         try {
-            var result = await sendTx('/api/applications', {
-                grant_id: id,
-                project_name: document.getElementById('app-name').value,
-                project_description: document.getElementById('app-description').value,
-                team_info: document.getElementById('app-team').value,
-                requested_amount: document.getElementById('app-amount').value,
-                website: document.getElementById('app-website').value,
-                github_url: document.getElementById('app-github').value,
-                evidence_urls: document.getElementById('app-evidence').value,
-                additional_info: document.getElementById('app-additional').value
-            });
-            document.getElementById('apply-result').innerHTML = '<div class="note show ok">✅ Application submitted!<br>App ID: <code>' + result.app_id + '</code><br>TX: <code>' + result.tx_hash + '</code></div>';
+            var txHash = await sendTx('submit_application', [
+                id,
+                document.getElementById('app-name').value,
+                document.getElementById('app-description').value,
+                document.getElementById('app-team').value,
+                BigInt(document.getElementById('app-amount').value || '0'),
+                document.getElementById('app-website').value,
+                document.getElementById('app-github').value,
+                document.getElementById('app-evidence').value,
+                document.getElementById('app-additional').value
+            ], 0n);
+            document.getElementById('apply-result').innerHTML = '<div class="note show ok">✅ Application submitted!<br>TX: <code>' + txHash + '</code></div>';
             document.getElementById('apply-form').reset();
         } catch (e) {
             note('Error: ' + e.message, 'err');
@@ -279,8 +363,8 @@ async function fundGrant(grantId) {
     if (!amount) return;
     loading('Funding grant...');
     try {
-        var result = await sendTx('/api/grants/' + grantId + '/fund', { value: amount });
-        document.getElementById('fund-result').innerHTML = '<div class="note show ok">✅ Funded!<br>TX: <code>' + result.tx_hash + '</code></div>';
+        var txHash = await sendTx('fund_grant', [grantId], BigInt(amount));
+        document.getElementById('fund-result').innerHTML = '<div class="note show ok">✅ Funded!<br>TX: <code>' + txHash + '</code></div>';
     } catch (e) {
         note('Error: ' + e.message, 'err');
     }
@@ -291,17 +375,17 @@ document.getElementById('create-form').onsubmit = async function(e) {
     e.preventDefault();
     loading('Publishing grant...');
     try {
-        var result = await sendTx('/api/grants', {
-            grant_id: document.getElementById('grant-id').value,
-            name: document.getElementById('grant-name').value,
-            description: document.getElementById('grant-description').value,
-            eligibility: document.getElementById('grant-eligibility').value,
-            criteria: document.getElementById('grant-criteria').value,
-            budget_rules: document.getElementById('grant-budget').value,
-            required_evidence: document.getElementById('grant-evidence').value,
-            deadline: document.getElementById('grant-deadline').value
-        });
-        document.getElementById('create-result').innerHTML = '<div class="note show ok">✅ Grant published!<br>ID: <code>' + result.grant_id + '</code><br>TX: <code>' + result.tx_hash + '</code></div>';
+        var txHash = await sendTx('create_grant', [
+            document.getElementById('grant-id').value,
+            document.getElementById('grant-name').value,
+            document.getElementById('grant-description').value,
+            document.getElementById('grant-eligibility').value,
+            document.getElementById('grant-criteria').value,
+            document.getElementById('grant-budget').value,
+            document.getElementById('grant-evidence').value,
+            document.getElementById('grant-deadline').value
+        ], 0n);
+        document.getElementById('create-result').innerHTML = '<div class="note show ok">✅ Grant published!<br>ID: <code>' + document.getElementById('grant-id').value + '</code><br>TX: <code>' + txHash + '</code></div>';
         document.getElementById('create-form').reset();
         note('Grant created! Go to Grants tab to see it.', 'ok');
     } catch (e) {
@@ -315,42 +399,15 @@ async function checkStatus() {
     if (!appId) { note('Enter application ID', 'warn'); return; }
     loading('Checking status...');
     try {
-        var app = await fetch(API + '/api/applications/' + encodeURIComponent(appId)).then(r => r.json());
+        var result = await ethCall('get_application', [appId]);
         var resultEl = document.getElementById('status-result');
-        var html = '<div class="card" style="margin-top:1rem">' +
+        resultEl.innerHTML = '<div class="card" style="margin-top:1rem">' +
             '<h2>Application: ' + appId + '</h2>' +
-            '<p><strong>Project:</strong> ' + app.project_name + '</p>' +
-            '<p><strong>Status:</strong> ' + app.status + '</p>' +
-            '<p><strong>Grant ID:</strong> ' + app.grant_id + '</p>' +
-            '<p><strong>Requested:</strong> ' + (Number(app.requested_amount) / 1e18).toFixed(2) + ' GEN</p>';
-        
-        if (app.evaluation) {
-            try {
-                var ev = typeof app.evaluation === 'string' ? JSON.parse(app.evaluation) : app.evaluation;
-                html += '<div style="margin-top:1rem;padding:1rem;background:#0a0a0f;border-radius:8px">';
-                html += '<h3>Evaluation Result</h3>';
-                html += '<p><strong>Final:</strong> ' + ev.final + '</p>';
-                html += '<p><strong>Eligibility:</strong> ' + ev.eligibility + '</p>';
-                html += '<p><strong>Criteria:</strong> ' + ev.criteria + '</p>';
-                html += '<p><strong>Budget:</strong> ' + ev.budget + '</p>';
-                html += '<p><strong>Evidence:</strong> ' + ev.evidence + '</p>';
-                if (ev.reasons && ev.reasons.length > 0) {
-                    html += '<h4>Reasons:</h4><ul>' + ev.reasons.map(function(r) { return '<li>' + r + '</li>'; }).join('') + '</ul>';
-                }
-                html += '</div>';
-            } catch(e) {}
-        }
-        
-        html += '<p style="margin-top:1rem"><a href="' + EXPLORER + '" target="_blank">View on Explorer</a></p></div>';
-        
-        if (app.status === 'SUBMITTED') {
-            html += '<button class="btn btn-p" onclick="evaluateApp(\'' + appId + '\')" style="margin-top:1rem">Evaluate Application</button>';
-        }
-        if (app.status === 'APPROVED') {
-            html += '<button class="btn btn-s" onclick="releaseFunds(\'' + appId + '\')" style="margin-top:1rem;margin-left:.5rem">Release Funds</button>';
-        }
-        
-        resultEl.innerHTML = html;
+            '<div style="font-family:monospace;font-size:.8rem;word-break:break-all;background:#0a0a0f;padding:.5rem;border-radius:4px;margin-top:.5rem">' + result + '</div>' +
+            '<p style="margin-top:1rem"><a href="' + EXPLORER + '" target="_blank">View on Explorer</a></p>' +
+        '</div>' +
+        '<button class="btn btn-p" onclick="evaluateApp(\'' + appId + '\')" style="margin-top:1rem">Evaluate</button>' +
+        '<button class="btn btn-s" onclick="releaseFunds(\'' + appId + '\')" style="margin-top:1rem;margin-left:.5rem">Release Funds</button>';
     } catch (e) {
         note('Error: ' + e.message, 'err');
     }
@@ -360,9 +417,8 @@ async function checkStatus() {
 async function evaluateApp(appId) {
     loading('Evaluating application... (1-3 min)');
     try {
-        var result = await sendTx('/api/applications/' + appId + '/evaluate', {});
-        note('Evaluation complete!', 'ok');
-        checkStatus();
+        var txHash = await sendTx('evaluate_application', [appId], 0n);
+        note('Evaluation started! TX: ' + txHash, 'ok');
     } catch (e) {
         note('Error: ' + e.message, 'err');
     }
@@ -372,9 +428,8 @@ async function evaluateApp(appId) {
 async function releaseFunds(appId) {
     loading('Releasing funds...');
     try {
-        var result = await sendTx('/api/applications/' + appId + '/release', {});
-        note('Funds released!', 'ok');
-        checkStatus();
+        var txHash = await sendTx('release_funds', [appId], 0n);
+        note('Funds released! TX: ' + txHash, 'ok');
     } catch (e) {
         note('Error: ' + e.message, 'err');
     }
@@ -389,6 +444,7 @@ if (window.ethereum) {
             document.getElementById('walletBtn').classList.remove('connected');
         }
     });
+    window.ethereum.on('chainChanged', function() { loadGrants(); });
 }
 
 (async function() {
@@ -401,6 +457,7 @@ if (window.ethereum) {
                 if (parseInt(c, 16) === CHAIN_ID) {
                     document.getElementById('walletBtn').textContent = '✓ ' + acct.slice(0,6) + '...' + acct.slice(-4);
                     document.getElementById('walletBtn').classList.add('connected');
+                    loadGrants();
                 }
             }
         } catch(e) {}
