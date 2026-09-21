@@ -72,6 +72,7 @@
         <h1>Available Grants</h1>
         <p class="subtitle">Click a grant to view details and apply</p>
         <div id="grants-list"><p style="color:#888">Loading grants...</p></div>
+        <button class="btn btn-s" onclick="refreshGrants()" style="margin-top:1rem">Refresh Grants</button>
     </div>
     <div id="page-detail" class="page"><div id="detail-content"></div></div>
     <div id="page-create" class="page">
@@ -265,6 +266,21 @@ function decodeUint(hex) {
     try { return parseInt(hex.startsWith('0x') ? hex.slice(2, 66) : hex.slice(0, 64), 16); } catch(e) { return 0; }
 }
 
+// Rate limit tracking
+var lastCallTime = 0;
+var callQueue = [];
+var isProcessingQueue = false;
+
+async function rateLimitedCall(method, args) {
+    var now = Date.now();
+    var timeSinceLastCall = now - lastCallTime;
+    if (timeSinceLastCall < 2000) {
+        await new Promise(r => setTimeout(r, 2000 - timeSinceLastCall));
+    }
+    lastCallTime = Date.now();
+    return await ethCall(method, args);
+}
+
 async function loadGrants() {
     var listEl = document.getElementById('grants-list');
     listEl.innerHTML = '<p style="color:#888">Loading grants from chain...</p>';
@@ -274,8 +290,26 @@ async function loadGrants() {
         return;
     }
     
+    // Check cache first
+    var cached = localStorage.getItem('grantguard_grants');
+    var cacheTime = localStorage.getItem('grantguard_grants_time');
+    if (cached && cacheTime && (Date.now() - parseInt(cacheTime)) < 300000) {
+        try {
+            grants = JSON.parse(cached);
+            if (grants.length > 0) {
+                listEl.innerHTML = grants.map(function(g) {
+                    return '<div class="card grant-card" onclick="viewGrant(\'' + g.id + '\')">' +
+                        '<h3>' + g.name + '</h3>' +
+                        '<div class="meta">ID: ' + g.id + ' · Click to view</div>' +
+                    '</div>';
+                }).join('');
+                return;
+            }
+        } catch(e) {}
+    }
+    
     try {
-        var statsResult = await ethCall('get_stats', []);
+        var statsResult = await rateLimitedCall('get_stats', []);
         var totalGrants = decodeUint(statsResult);
         
         if (totalGrants === 0) {
@@ -284,19 +318,21 @@ async function loadGrants() {
         }
         
         var found = [];
-        var grantIds = [];
-        for (var i = 1; i <= 5; i++) grantIds.push('test-grant-' + i);
-        for (var i = 0; i < 5; i++) grantIds.push('grant_' + i);
+        var grantIds = ['test-grant-1', 'test-grant-2', 'test-grant-3', 'grant_0', 'grant_1'];
         
         for (var i = 0; i < grantIds.length; i++) {
             try {
-                var result = await ethCall('get_grant', [grantIds[i]]);
+                var result = await rateLimitedCall('get_grant', [grantIds[i]]);
                 var name = decodeString(result);
                 if (name) found.push({ id: grantIds[i], name: name });
             } catch(e) {}
         }
         
         grants = found;
+        
+        // Cache results
+        localStorage.setItem('grantguard_grants', JSON.stringify(grants));
+        localStorage.setItem('grantguard_grants_time', Date.now().toString());
         
         if (grants.length === 0) {
             listEl.innerHTML = '<p style="color:#888">No grants found. Create the first one!</p>';
@@ -311,6 +347,12 @@ async function loadGrants() {
     } catch (e) {
         listEl.innerHTML = '<p style="color:#888">Error loading grants: ' + e.message + '</p>';
     }
+}
+
+function refreshGrants() {
+    localStorage.removeItem('grantguard_grants');
+    localStorage.removeItem('grantguard_grants_time');
+    loadGrants();
 }
 
 function viewGrant(id) {
