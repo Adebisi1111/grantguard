@@ -36,7 +36,7 @@
     
     <div id="walletStatus" class="wallet-status disconnected">Not Connected</div>
     
-    <button class="btn btn-p" id="btnConnect" onclick="handleConnect()">Connect Wallet</button>
+    <button class="btn btn-p" id="btnConnect">Connect Wallet</button>
     
     <div id="note" class="note" style="display:none"></div>
     
@@ -67,7 +67,7 @@
         <input type="text" id="grantEvidence" value="GitHub repo">
         <label>Deadline</label>
         <input type="date" id="grantDeadline" value="2026-12-31">
-        <button class="btn btn-p" id="btnCreate" onclick="handleCreate()">Create Grant</button>
+        <button class="btn btn-p" id="btnCreate">Create Grant</button>
         <div id="createResult"></div>
     </div>
     
@@ -92,7 +92,7 @@
         <input type="text" id="applyEvidence" value="https://github.com/test">
         <label>Additional Info</label>
         <textarea id="applyAdditional">Test info</textarea>
-        <button class="btn btn-p" id="btnApply" onclick="handleApply()">Submit Application</button>
+        <button class="btn btn-p" id="btnApply">Submit Application</button>
         <div id="applyResult"></div>
     </div>
     
@@ -101,9 +101,9 @@
         <h2>Check Application Status</h2>
         <label>Application ID</label>
         <input type="text" id="checkAppId" value="app_0">
-        <button class="btn btn-p" id="btnCheck" onclick="handleCheck()">Check Status</button>
-        <button class="btn" id="btnEval" onclick="handleEvaluate()">Evaluate</button>
-        <button class="btn" id="btnRelease" onclick="handleRelease()">Release Funds</button>
+        <button class="btn btn-p" id="btnCheck">Check Status</button>
+        <button class="btn" id="btnEval">Evaluate</button>
+        <button class="btn" id="btnRelease">Release Funds</button>
         <div id="statusResult" style="margin-top:1rem"></div>
     </div>
 </div>
@@ -144,7 +144,7 @@ async function rpc(method, params) {
     return j.result;
 }
 
-async function handleConnect() {
+async function connectWallet() {
     if (acct) {
         acct = null;
         document.getElementById('walletStatus').textContent = 'Not Connected';
@@ -208,7 +208,7 @@ async function loadGrants() {
     } catch (e) { listEl.innerHTML = '<p style="color:#888">Error: ' + e.message + '</p>'; }
 }
 
-async function handleCreate() {
+async function createGrant() {
     if (!acct) { showNote('Connect wallet first!', 'err'); return; }
     showNote('Creating grant...', 'warn');
     try {
@@ -228,7 +228,7 @@ async function handleCreate() {
     }
 }
 
-async function handleApply() {
+async function submitApplication() {
     if (!acct) { showNote('Connect wallet first!', 'err'); return; }
     showNote('Submitting application...', 'warn');
     try {
@@ -249,7 +249,7 @@ async function handleApply() {
     }
 }
 
-async function handleCheck() {
+async function checkStatus() {
     if (!acct) { showNote('Connect wallet first!', 'err'); return; }
     var appId = document.getElementById('checkAppId').value.trim();
     if (!appId) { showNote('Enter App ID', 'warn'); return; }
@@ -263,7 +263,7 @@ async function handleCheck() {
     }
 }
 
-async function handleEvaluate() {
+async function evaluateApp() {
     if (!acct) { showNote('Connect wallet first!', 'err'); return; }
     var appId = document.getElementById('checkAppId').value.trim();
     if (!appId) { showNote('Enter App ID', 'warn'); return; }
@@ -276,7 +276,7 @@ async function handleEvaluate() {
     }
 }
 
-async function handleRelease() {
+async function releaseFunds() {
     if (!acct) { showNote('Connect wallet first!', 'err'); return; }
     var appId = document.getElementById('checkAppId').value.trim();
     if (!appId) { showNote('Enter App ID', 'warn'); return; }
@@ -288,6 +288,13 @@ async function handleRelease() {
         document.getElementById('statusResult').innerHTML = '<div class="note err">Error: ' + e.message + '</div>';
     }
 }
+
+document.getElementById('btnConnect').addEventListener('click', connectWallet);
+document.getElementById('btnCreate').addEventListener('click', createGrant);
+document.getElementById('btnApply').addEventListener('click', submitApplication);
+document.getElementById('btnCheck').addEventListener('click', checkStatus);
+document.getElementById('btnEval').addEventListener('click', evaluateApp);
+document.getElementById('btnRelease').addEventListener('click', releaseFunds);
 
 if (window.ethereum) {
     window.ethereum.on('accountsChanged', function(a) { if (!a.length) { acct = null; document.getElementById('walletStatus').textContent = 'Not Connected'; document.getElementById('walletStatus').className = 'wallet-status disconnected'; document.getElementById('btnConnect').textContent = 'Connect Wallet'; document.getElementById('grantsList').innerHTML = '<p style="color:#888">Connect wallet to view grants</p>'; } });
